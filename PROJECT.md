@@ -142,6 +142,13 @@ Claude y depurar casos concretos juntos.
 - **Efectos de zona/aura con 2+ fuentes simultáneas del mismo nombre**: atribución
   estructuralmente imposible de resolver solo con el texto del chat (ver "Motor de atribución"
   arriba) — se deja sin atribuir y marcado como ambiguo en vez de adivinar.
+- **Desglose por turno: descartado, no solo pendiente.** El log solo marca el fin de turno
+  cuando el jugador pasa antes de tiempo y se le devuelven segundos ("X segundos devueltos
+  para el siguiente turno"); cuando el turno acaba por el timer, no se registra nada. No hay
+  forma fiable de saber dónde empieza/acaba cada turno con este log, así que no se puede
+  trocear el combate turno a turno sin adivinar. En su lugar, en "Datos avanzados" hay un
+  **ratio de eficiencia** por jugador que no depende de turnos: daño medio por hechizo con
+  efecto, y daño hecho ÷ daño recibido.
 
 ## Estructura de archivos
 
@@ -175,9 +182,9 @@ wakfu-calc/
 - [ ] Revisar eventos marcados como bug en el modo debug cuando el usuario los exporte
 - [ ] Vista de tendencia (gráfico) cuando haya 3+ combates guardados — pendiente
 - [ ] IA que analice el historial y dé consejos concretos a partir de los deltas — pendiente
-- [ ] Desglose por turno — pendiente
+- [x] Desglose por turno — descartado (el log no marca fin de turno de forma fiable, ver "Limitaciones conocidas")
 - [x] Etiquetar combates (jefe/mazmorra/dificultad) al guardarlos, mostradas en historial y comparativa
-- [ ] Ratios de eficiencia (daño por turno, daño hecho vs. recibido) — pendiente
+- [x] Ratios de eficiencia: daño medio por hechizo con efecto, y daño hecho ÷ recibido (en "Datos avanzados")
 
 ## Trabajo multi-sesión / multi-cuenta
 

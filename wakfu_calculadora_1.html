@@ -700,6 +700,14 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
     const critPct = p.effectSpells ? ((p.effectCrits / p.effectSpells) * 100).toFixed(1) : '—';
     const koFlag = p.koCount > 2 ? ' style="text-decoration:underline dotted;"' : '';
     const koLinesWithWarning = p.koCount > 2 ? ['⚠ Más de 2 derribos: revisa si el rango incluye varios combates', ...p.koLines] : p.koLines;
+    // Ratios de eficiencia. No hay "daño por turno" real porque el log no marca de forma
+    // fiable el fin de cada turno (solo cuando se devuelven segundos al pasar antes de tiempo,
+    // nunca cuando el turno acaba por el timer) — así que en su lugar se usa daño medio por
+    // hechizo que tuvo efecto, que no depende de saber dónde empieza/acaba cada turno.
+    const avgDmgPerSpell = p.effectSpells ? Math.round(p.dmgDone / p.effectSpells) : null;
+    const dmgRatio = p.dmgReceived ? (p.dmgDone / p.dmgReceived) : (p.dmgDone > 0 ? null : 0);
+    const dmgRatioDisplay = p.dmgReceived ? dmgRatio.toFixed(2) : (p.dmgDone > 0 ? '∞' : '—');
+    const dmgRatioSort = p.dmgReceived ? dmgRatio : (p.dmgDone > 0 ? 999999 : -1);
     rows += `<tr>
       <td>${escapeHtml(n)}</td>
       <td class="dmg" data-sort="${p.dmgDone}">${p.dmgDone.toLocaleString('es-ES')}</td>
@@ -716,6 +724,8 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
       <td>${p.armorGiven.toLocaleString('es-ES')}</td>
       <td>${p.armorReceived.toLocaleString('es-ES')}</td>
       <td>${p.anticipatedHits}</td>
+      <td data-sort="${avgDmgPerSpell===null?-1:avgDmgPerSpell}">${avgDmgPerSpell===null?'—':avgDmgPerSpell.toLocaleString('es-ES')}</td>
+      <td data-sort="${dmgRatioSort}">${dmgRatioDisplay}</td>
     </tr>`;
     const cats = Object.keys(p.mods);
     for (const cat of cats){
@@ -792,15 +802,20 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
-    <div class="meta" style="margin-top:26px; cursor:pointer;" id="toggleAdv">▸ Ver datos avanzados (armadura, golpes anticipados, debuffs de característica)</div>
+    <div class="meta" style="margin-top:26px; cursor:pointer;" id="toggleAdv">▸ Ver datos avanzados (armadura, golpes anticipados, ratios de eficiencia)</div>
     <div id="advWrap" style="display:none; margin-top:10px;">
       <table id="advTable">
         <thead><tr>
           <th>Jugador</th><th class="sortable">Armadura dada</th><th class="sortable">Armadura recibida</th>
-          <th class="sortable">Golpes anticipados</th>
+          <th class="sortable">Golpes anticipados</th><th class="sortable">Daño medio/hechizo</th>
+          <th class="sortable">Daño hecho ÷ recibido</th>
         </tr></thead>
         <tbody>${rows2}</tbody>
       </table>
+      <div class="meta" style="margin-top:8px;">"Daño medio/hechizo" es el daño hecho entre hechizos con efecto, no por turno — el log no
+        marca de forma fiable cuándo acaba cada turno (solo cuando se pasa antes de tiempo y se
+        devuelven segundos, nunca cuando acaba por el timer), así que un desglose por turno real
+        no es viable con este log.</div>
     </div>
     <div class="meta" style="margin-top:14px; cursor:pointer;" id="toggleMods">▸ Ver desglose de buffs/debuffs % aplicados a otros (por categoría)</div>
     <div id="modsWrap" style="display:none; margin-top:10px;">
@@ -931,7 +946,7 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
     const w = document.getElementById('advWrap');
     const open = w.style.display !== 'none';
     w.style.display = open ? 'none' : 'block';
-    this.textContent = (open ? '▸' : '▾') + ' Ver datos avanzados (armadura, golpes anticipados, debuffs de característica)';
+    this.textContent = (open ? '▸' : '▾') + ' Ver datos avanzados (armadura, golpes anticipados, ratios de eficiencia)';
   });
   document.getElementById('toggleMods').addEventListener('click', function(){
     const w = document.getElementById('modsWrap');
