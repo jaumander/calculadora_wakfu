@@ -15,16 +15,21 @@ que tiene el detalle completo del problema, la solución y qué toca/no toca.
 **Hecho hasta ahora:**
 - 1/3: `subsetPlayers`, `splitByRole` (helpers puros, probados con Node), modal reutilizable
   `openRoleModal(entryIds, onSaved)` con overlay + toggles Aliado/Enemigo, botón "Clasificar"
-  por entrada del historial que lo abre para ese combate. Persiste en `entry.roles`. Todavía NO
-  se usa en la comparativa (milestone 2).
+  por entrada del historial que lo abre para ese combate. Persiste en `entry.roles`.
+- 2/3: `renderComparison` ya no amalgama — "Total del grupo" se divide en dos tablas (Aliados /
+  Enemigos), aviso "N sin clasificar" con enlace que abre el modal para los 2 combates
+  comparados a la vez, y etiqueta de bando junto al nombre en "por jugador" (con aviso si el
+  mismo nombre tiene bando distinto en cada combate). Probado con Node reproduciendo el caso
+  exacto del screenshot original (daño hecho == daño recibido a nivel de grupo) y confirmado que
+  ya no ocurre tras separar por bando.
 
 **Falta por hacer (milestones, ver PROJECT.md):**
-2. Usar los roles en `renderComparison` (dividir Total del grupo en Aliados/Enemigos + aviso de
-   sin clasificar + etiqueta de bando por jugador).
-3. Pulido + cerrar PROJECT.md.
+3. Pulido: `roles: {}` por defecto al guardar un combate nuevo, aviso de sin clasificar también
+   en la línea resumen del historial (no solo en la comparativa), actualizar PROJECT.md a
+   estado terminado.
 
-**Dónde tocar:** `wakfu_calculadora_1.html` — buscar `combatTotals`, `renderHistoryList`,
-`renderComparison`.
+**Dónde tocar:** `wakfu_calculadora_1.html` — bloque `btnSaveHistory` (para `roles: {}`) y
+`renderHistoryList` (para el aviso de sin clasificar en la línea resumen).
 
 **Cualquier cosa rota/a medio probar ahora mismo:** nada roto.
 
