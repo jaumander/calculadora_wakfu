@@ -623,11 +623,15 @@ async function renderHistoryList(){
   const sorted = [...list].sort((a,b) => new Date(b.date) - new Date(a.date));
   wrap.innerHTML = sorted.map(entry => {
     const t = combatTotals(entry.players);
+    const split = splitByRole(entry);
+    const unclassifiedNote = split.sinClasificar.length
+      ? ` <span style="color:var(--accent2);">· ${split.sinClasificar.length} sin clasificar como aliado/enemigo</span>`
+      : '';
     return `<div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line);" data-id="${entry.id}">
       <input type="checkbox" class="historyCheck" data-id="${entry.id}">
       <div style="flex:1;">
         <div style="font-size:13px;">${escapeHtml(entry.name)}</div>
-        <div style="font-size:11px; color:var(--muted);">${fmtDate(entry.date)} — MVP daño: ${escapeHtml(t.mvp || '—')} (${t.mvpDmg.toLocaleString('es-ES')}) · Derribos totales: ${t.kos}</div>
+        <div style="font-size:11px; color:var(--muted);">${fmtDate(entry.date)} — MVP daño: ${escapeHtml(t.mvp || '—')} (${t.mvpDmg.toLocaleString('es-ES')}) · Derribos totales: ${t.kos}${unclassifiedNote}</div>
         ${tagLine(entry.tags)}
       </div>
       <button class="ghost" style="padding:4px 8px;" data-classify="${entry.id}">Clasificar</button>
@@ -1597,6 +1601,7 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
       startLine: currentResult.startLine,
       endLine: currentResult.endLine,
       tags,
+      roles: {},
       players: currentResult.players
     };
     const list = await loadHistory();
