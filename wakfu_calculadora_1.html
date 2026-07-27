@@ -157,6 +157,45 @@ async function saveHistoryList(list){
   catch(e){ console.error('No se pudo guardar el historial persistente', e); }
 }
 
+// --- Correcciones de atribución aprendidas en el modo debug ---
+// Alcance deliberadamente limitado: SOLO es un mapa { nombreEstado: nombreJugador }. No guarda
+// código, ni reglas nuevas, ni cambia regex de parseo — únicamente decide a quién se atribuye un
+// nombre de estado/aura ya reconocido por el parser cuando la heurística por turno era ambigua.
+// Así una corrección nunca puede alterar el comportamiento general de la app ni romper el parseo.
+let resolutionsCache = null;
+
+async function loadResolutions(){
+  if (resolutionsCache) return resolutionsCache;
+  if (!hasStorage()){ resolutionsCache = {}; return resolutionsCache; }
+  try{
+    const res = await window.storage.get('stateResolutions', false);
+    resolutionsCache = res && res.value ? JSON.parse(res.value) : {};
+  } catch(e){
+    resolutionsCache = {};
+  }
+  return resolutionsCache;
+}
+
+async function saveResolution(effName, playerName){
+  const map = await loadResolutions();
+  map[effName] = playerName;
+  resolutionsCache = map;
+  if (hasStorage()){
+    try{ await window.storage.set('stateResolutions', JSON.stringify(map), false); }
+    catch(e){ console.error('No se pudo guardar la corrección aprendida', e); }
+  }
+}
+
+async function deleteResolution(effName){
+  const map = await loadResolutions();
+  delete map[effName];
+  resolutionsCache = map;
+  if (hasStorage()){
+    try{ await window.storage.set('stateResolutions', JSON.stringify(map), false); }
+    catch(e){ console.error('No se pudo actualizar las correcciones aprendidas', e); }
+  }
+}
+
 function fmtDate(iso){
   const d = new Date(iso);
   return d.toLocaleDateString('es-ES') + ' ' + d.toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'});
@@ -326,7 +365,7 @@ btnReset.addEventListener('click', () => {
   document.getElementById('endKw').value = 'fin calculadora';
 });
 
-btnSubmit.addEventListener('click', () => {
+btnSubmit.addEventListener('click', async () => {
   const startKw = document.getElementById('startKw').value.trim().toLowerCase();
   const endKw = document.getElementById('endKw').value.trim().toLowerCase();
   if (!rawText) return;
@@ -353,13 +392,18 @@ btnSubmit.addEventListener('click', () => {
   }
 
   const slice = lines.slice(startIdx + 1, endIdx);
-  const { players, ambiguous, debugEvents } = parseCombat(slice);
+  const resolutions = await loadResolutions();
+  const { players, ambiguous, debugEvents } = parseCombat(slice, resolutions);
   renderResults(players, ambiguous, debugEvents, lines[startIdx], lines[endIdx]);
   const extra = startIdxAll.length > 1 ? ` (se detectaron ${startIdxAll.length} sesiones con esas palabras clave; se usó la más reciente)` : '';
   status.textContent = `Analizadas ${slice.length} líneas entre inicio y fin.${extra}`;
 });
 
-function parseCombat(lines){
+// resolutions: mapa persistente { nombreEstadoEnMinusculas: nombreJugador } con correcciones de
+// atribución confirmadas por el usuario en el modo debug (ver saveResolution). Es opcional y por
+// defecto vacío para no romper llamadas directas a parseCombat (p. ej. en pruebas).
+function parseCombat(lines, resolutions){
+  resolutions = resolutions || {};
   const players = {};
   function ensure(name){
     if (!players[name]) players[name] = {
@@ -389,8 +433,8 @@ function parseCombat(lines){
   const ambiguous = []; // eventos que no se pudieron atribuir con confianza
   const debugEvents = []; // registro de CADA decisión de atribución, para el modo debug
 
-  function logEvent(line, category, target, source, reason){
-    debugEvents.push({ line, category, target: target || '—', source: source || '(sin atribuir)', reason });
+  function logEvent(line, category, target, source, reason, effName){
+    debugEvents.push({ line, category, target: target || '—', source: source || '(sin atribuir)', reason, effName: effName || null });
   }
 
   function registerStateOwner(stateName, caster){
@@ -401,27 +445,34 @@ function parseCombat(lines){
 
   // Busca en el texto sobrante (tras el %, la armadura, etc.) un nombre de estado/hechizo entre
   // paréntesis (ignorando "(N turnos)") y decide quién debería llevarse el mérito real:
-  // - si el estado tiene un único "dueño" conocido (se auto-aplicó primero), se le atribuye a él,
-  //   aunque no sea quien tiene el turno ahora mismo (caso árbol/zona que sigue activa)
-  // - si el estado tiene 2+ dueños posibles (ej. dos Sadidas con el mismo aura), NO se adivina:
-  //   se registra como evento ambiguo y no se atribuye a nadie
+  // - si el usuario ya confirmó una corrección para ese nombre de estado en el modo debug
+  //   (guardada en `resolutions`), esa corrección manda siempre, sin más preguntas
+  // - si no, y el estado tiene un único "dueño" conocido (se auto-aplicó primero), se le
+  //   atribuye a él, aunque no sea quien tiene el turno ahora mismo (caso árbol/zona activa)
+  // - si el estado tiene 2+ dueños posibles (ej. dos Sadidas con el mismo aura) y no hay
+  //   corrección guardada, NO se adivina: se registra como evento ambiguo y no se atribuye a nadie
   // - si el nombre no coincide con ningún estado conocido, se usa el lanzador actual (heurística de siempre)
-  // Devuelve { source, reason } — source puede ser null si no se pudo atribuir.
+  // Devuelve { source, reason, effName } — source puede ser null si no se pudo atribuir; effName
+  // se expone siempre que se detectó un nombre entre paréntesis, para que el modo debug pueda
+  // ofrecer "aprender" una corrección sobre ese mismo nombre en el futuro.
   function resolveSource(rest, target, category, rawLine){
     const nameMatch = rest && rest.match(/\(([^)]+)\)/);
     const effName = (nameMatch && !/^\d+\s*turnos?$/i.test(nameMatch[1])) ? nameMatch[1].trim().toLowerCase() : null;
+    if (effName && resolutions[effName]){
+      return { source: resolutions[effName], effName, reason: `Atribuido a ${resolutions[effName]} por una corrección manual guardada para el estado "${effName}" (aprendida en el modo debug)` };
+    }
     if (effName && stateOwners[effName]){
       const owners = [...stateOwners[effName]];
       if (owners.length === 1){
-        return { source: owners[0], reason: `Atribuido a ${owners[0]} por ser quien se auto-aplicó primero el estado "${effName}" (dueño registrado, aunque no tenga el turno ahora)` };
+        return { source: owners[0], effName, reason: `Atribuido a ${owners[0]} por ser quien se auto-aplicó primero el estado "${effName}" (dueño registrado, aunque no tenga el turno ahora)` };
       }
       ambiguous.push({ category, target, effName, candidates: owners, line: rawLine });
-      return { source: null, reason: `Ambiguo: el estado "${effName}" tiene varios posibles dueños (${owners.join(', ')}) — no atribuido a ninguno` };
+      return { source: null, effName, reason: `Ambiguo: el estado "${effName}" tiene varios posibles dueños (${owners.join(', ')}) — no atribuido a ninguno` };
     }
     if (currentCaster && currentCaster !== target){
-      return { source: currentCaster, reason: `Atribuido a ${currentCaster} por ser quien lanzó el último hechizo (${currentSpell || '?'}) — heurística por turno` };
+      return { source: currentCaster, effName, reason: `Atribuido a ${currentCaster} por ser quien lanzó el último hechizo (${currentSpell || '?'}) — heurística por turno` };
     }
-    return { source: null, reason: 'Sin lanzador activo distinto del objetivo; no atribuido a nadie' };
+    return { source: null, effName, reason: 'Sin lanzador activo distinto del objetivo; no atribuido a nadie' };
   }
 
   function closePending(){
@@ -526,9 +577,9 @@ function parseCombat(lines){
       const target = cm[1].trim();
       const amount = parseInt(cm[2].replace(/\./g, ''), 10);
       ensure(target).armorReceived += amount;
-      const { source, reason } = resolveSource(cm[3] || '', target, 'armadura dada', line.trim());
+      const { source, effName, reason } = resolveSource(cm[3] || '', target, 'armadura dada', line.trim());
       if (source) ensure(source).armorGiven += amount;
-      logEvent(line.trim(), 'armadura', target, source, reason);
+      logEvent(line.trim(), 'armadura', target, source, reason, effName);
       continue;
     }
 
@@ -541,18 +592,18 @@ function parseCombat(lines){
       const rest = cm[5] || '';
       const turnsMatch = rest.match(/\((\d+)\s*turnos?\)/);
       const turns = turnsMatch ? parseInt(turnsMatch[1], 10) : null;
-      const { source, reason } = resolveSource(rest, target, category, line.trim());
+      const { source, effName, reason } = resolveSource(rest, target, category, line.trim());
       if (source) regMod(ensure(source), category, !isDebuff, amount, turns, line.trim());
-      logEvent(line.trim(), `${category} (${isDebuff?'debuff':'buff'})`, target, source, reason);
+      logEvent(line.trim(), `${category} (${isDebuff?'debuff':'buff'})`, target, source, reason, effName);
       continue;
     }
 
     if ((cm = resistRe.exec(content))){
       const target = cm[1].trim();
       const amount = parseFloat(cm[2]);
-      const { source, reason } = resolveSource(cm[3] || '', target, 'resistencia elemental (pts)', line.trim());
+      const { source, effName, reason } = resolveSource(cm[3] || '', target, 'resistencia elemental (pts)', line.trim());
       if (source) regMod(ensure(source), 'resistencia elemental (pts)', false, amount, null, line.trim());
-      logEvent(line.trim(), 'resistencia elemental (pts)', target, source, reason);
+      logEvent(line.trim(), 'resistencia elemental (pts)', target, source, reason, effName);
       continue;
     }
 
@@ -561,9 +612,9 @@ function parseCombat(lines){
       const amount = parseFloat(cm[2]);
       const resource = cm[3];
       const category = resource + ' quitado (pts)';
-      const { source, reason } = resolveSource(cm[4] || '', target, category, line.trim());
+      const { source, effName, reason } = resolveSource(cm[4] || '', target, category, line.trim());
       if (source) regMod(ensure(source), category, false, amount, null, line.trim());
-      logEvent(line.trim(), category, target, source, reason);
+      logEvent(line.trim(), category, target, source, reason, effName);
       continue;
     }
 
