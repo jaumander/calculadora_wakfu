@@ -24,54 +24,28 @@ usado para el historial (guardado automático dentro del panel / exportar-import
 el modelo a seguir: detectar el contexto con `hasStorage()` y degradar de forma explícita y
 avisada, nunca en silencio.
 
-**Estado real a día de hoy (no se cumple del todo):**
-- ✅ **Historial persistente**: cumple — botones "Exportar historial"/"Importar historial" como
+**Estado real a día de hoy — las tres features ya cumplen:**
+- ✅ **Historial persistente**: botones "Exportar historial"/"Importar historial" como
   alternativa fuera del panel, con nota explicando la limitación.
-- ⚠️ **Correcciones de atribución aprendidas** (`stateResolutions`): NO cumple — hoy, si no hay
-  `window.storage`, `resolutionsCache` se queda vacío en cada carga sin avisar de nada. El usuario
-  puede confirmar una corrección en el modo debug y verla desaparecer al recargar la página sin
-  ninguna explicación.
-- ⚠️ **Análisis con IA**: NO cumple — hoy, fuera del panel, el botón "Analizar con IA" siempre
-  falla (el `fetch` sin API key solo funciona dentro del artifact) y el motivo solo se explica en
-  el mensaje de error, sin ninguna alternativa funcional.
-
-### Diseño propuesto para arreglar esto (teorizado, pendiente de decisión antes de implementar)
-
-**Correcciones aprendidas → `localStorage` como plan B.** Es un simple mapa `{estado: jugador}`
-que no necesita compartirse entre dispositivos como el historial, así que no hace falta
-exportar/importar: basta con que, cuando `!hasStorage()`, `loadResolutions`/`saveResolution`/
-`deleteResolution` lean y escriban en `localStorage` (clave propia, ej. `wakfu_calc_resolutions`)
-en vez de quedarse solo en memoria. Se añadiría una nota junto a la tarjeta, igual que la del
-historial, explicando que fuera del panel se guarda solo en este navegador.
-
-**Análisis con IA → "trae tu propia clave" (BYOK) como plan B.** Confirmado contra la
-documentación de Anthropic: la API de Claude admite llamadas directas desde el navegador si se
-añade la cabecera `anthropic-dangerous-direct-browser-access: true` junto con `x-api-key: <clave>`
-y `anthropic-version: 2023-06-01` — es el mecanismo oficial pensado exactamente para herramientas
-"bring your own key" como esta. Propuesta concreta:
-
-1. Cuando `!hasStorage()` y no hay clave guardada, el botón "Analizar con IA" se sustituye por un
-   campo para pegar una clave de `console.anthropic.com` + botón "Guardar clave", con una nota
-   explicando que se guarda solo en este navegador y nunca se envía a ningún sitio salvo
-   directamente a `api.anthropic.com`. Enlace "Olvidar clave" para borrarla.
-2. Con la clave guardada, se reutiliza tal cual el mismo `buildAIPayload`/`buildAIPrompt` ya
-   construido — solo cambian las cabeceras del `fetch` (se añaden `x-api-key`, `anthropic-version`
-   y la cabecera de acceso directo desde navegador) y el modelo se sigue fijando explícitamente
-   (`claude-sonnet-4-6`, igual que dentro del panel).
-3. **Matiz de seguridad a no ignorar:** el origen de `localStorage` para páginas abiertas con
-   `file://` es inconsistente entre navegadores (en algunos, todas las páginas locales abiertas
-   así pueden compartir almacenamiento). Para uso personal en un único navegador el riesgo es
-   bajo, pero conviene decirlo en la interfaz: la clave NO viaja dentro del `.html` cuando se
-   comparte con otra persona (vive en el navegador de quien la guardó, no en el archivo), así que
-   quien reciba el archivo tendría que pegar la suya propia. Es bueno para evitar fugas
-   accidentales, pero hay que dejarlo explícito para que no sorprenda.
-4. **Alternativa más conservadora, sin `localStorage` en absoluto:** pedir la clave cada vez que
-   se pulse "Analizar con IA" y mantenerla solo en memoria durante la sesión (igual que ya hace la
-   caché de respuestas de IA). Más incómodo de usar, pero elimina cualquier duda sobre
-   persistencia de una clave sensible.
-
-No se ha implementado todavía — falta decidir entre guardar la clave en `localStorage` (opción 3,
-más cómoda) o no guardarla nunca (opción 4, más conservadora) antes de tocar código.
+- ✅ **Correcciones de atribución aprendidas** (`stateResolutions`): fuera del panel
+  (`!hasStorage()`), `loadResolutions`/`saveResolution`/`deleteResolution` leen y escriben en
+  `localStorage` (clave `wakfu_calc_resolutions`) en vez de quedarse solo en memoria. La tarjeta
+  muestra una nota avisando de que, fuera del panel, se guardan solo en ese navegador.
+- ✅ **Análisis con IA**: fuera del panel funciona con "trae tu propia clave" (BYOK). Se eligió
+  la opción cómoda: la clave se guarda en `localStorage` (clave `wakfu_calc_api_key`), nunca
+  viaja dentro del `.html` en sí (vive en el navegador de quien la pegó, no en el archivo — quien
+  reciba el `.html` compartido tendría que pegar la suya propia). La tarjeta de IA
+  (`renderAICard`, en un contenedor `#aiCardBody` que se re-renderiza solo, sin repintar toda la
+  tabla de resultados) tiene 3 modos: dentro del panel (botón directo, sin clave, como siempre);
+  fuera del panel sin clave guardada (campo para pegarla + "Guardar clave"); fuera del panel con
+  clave guardada (botón directo + enlace "Olvidar clave"). Las cabeceras del `fetch` cambian según
+  el caso (`buildAIHeaders`, función pura): sin clave, solo `Content-Type`; con clave, se añaden
+  `x-api-key`, `anthropic-version: 2023-06-01` y `anthropic-dangerous-direct-browser-access: true`
+  — el mecanismo oficial de Anthropic para llamar a la API directamente desde el navegador.
+  **Matiz de seguridad conocido y aceptado:** el origen de `localStorage` para páginas `file://`
+  es inconsistente entre navegadores (en algunos, todas las páginas locales abiertas así pueden
+  compartir almacenamiento); para uso personal en un único navegador el riesgo se consideró bajo
+  frente a la comodidad de no tener que pegar la clave en cada análisis.
 
 ## Formato del log — confirmado con datos reales, no supuesto
 
@@ -174,11 +148,10 @@ esta feature simplemente no tienen etiquetas y se muestran igual, sin romperse.
   Si un jugador no tiene combates previos guardados, se le indica explícitamente a la IA que no
   invente una comparación para él. La respuesta se cachea en memoria durante la sesión (no en
   `window.storage`) para no repetir la llamada por accidente si se pulsa el botón dos veces;
-  hay un enlace "Volver a generar" para forzar una llamada nueva a propósito. Al igual que el
-  guardado automático del historial, **solo funciona dentro del panel de chat de Claude** — si
-  se abre el `.html` suelto en el navegador, el botón falla con un aviso explicando por qué, en
-  vez de un error confuso. *(Pendiente de arreglar — ver "Principio de diseño: debe funcionar
-  también fuera del panel de chat" al principio de este documento.)*
+  hay un enlace "Volver a generar" para forzar una llamada nueva a propósito. Dentro del panel de
+  chat de Claude funciona directamente, sin clave. Fuera del panel (`.html` suelto), usa BYOK con
+  una clave propia guardada en `localStorage` — ver "Principio de diseño: debe funcionar también
+  fuera del panel de chat" al principio de este documento para el detalle.
 
 ## Modo debug que aprende (alcance deliberadamente limitado)
 

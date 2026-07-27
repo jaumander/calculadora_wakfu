@@ -135,6 +135,7 @@
     un nombre de estado/aura ya reconocido por el parser cuando antes era ambiguo. No cambian
     ninguna otra parte de la app.</div>
   <div id="resolutionsList"><span style="color:var(--muted); font-size:13px;">Cargando…</span></div>
+  <div id="resolutionsNote" class="meta" style="margin-top:8px;"></div>
 </div>
 
 <div id="results"></div>
@@ -214,37 +215,55 @@ async function saveHistoryList(list){
 // nombre de estado/aura ya reconocido por el parser cuando la heurística por turno era ambigua.
 // Así una corrección nunca puede alterar el comportamiento general de la app ni romper el parseo.
 let resolutionsCache = null;
+const RESOLUTIONS_LOCAL_KEY = 'wakfu_calc_resolutions';
 
 async function loadResolutions(){
   if (resolutionsCache) return resolutionsCache;
-  if (!hasStorage()){ resolutionsCache = {}; return resolutionsCache; }
-  try{
-    const res = await window.storage.get('stateResolutions', false);
-    resolutionsCache = res && res.value ? JSON.parse(res.value) : {};
-  } catch(e){
+  if (hasStorage()){
+    try{
+      const res = await window.storage.get('stateResolutions', false);
+      resolutionsCache = res && res.value ? JSON.parse(res.value) : {};
+    } catch(e){
+      resolutionsCache = {};
+    }
+    return resolutionsCache;
+  }
+  // Fuera del panel de chat: localStorage como plan B, para no perder las correcciones al recargar.
+  if (hasLocalStorage()){
+    try{
+      const raw = window.localStorage.getItem(RESOLUTIONS_LOCAL_KEY);
+      resolutionsCache = raw ? JSON.parse(raw) : {};
+    } catch(e){
+      resolutionsCache = {};
+    }
+  } else {
     resolutionsCache = {};
   }
   return resolutionsCache;
+}
+
+async function persistResolutions(map){
+  if (hasStorage()){
+    try{ await window.storage.set('stateResolutions', JSON.stringify(map), false); }
+    catch(e){ console.error('No se pudo guardar la corrección aprendida', e); }
+  } else if (hasLocalStorage()){
+    try{ window.localStorage.setItem(RESOLUTIONS_LOCAL_KEY, JSON.stringify(map)); }
+    catch(e){ console.error('No se pudo guardar la corrección aprendida en este navegador', e); }
+  }
 }
 
 async function saveResolution(effName, playerName){
   const map = await loadResolutions();
   map[effName] = playerName;
   resolutionsCache = map;
-  if (hasStorage()){
-    try{ await window.storage.set('stateResolutions', JSON.stringify(map), false); }
-    catch(e){ console.error('No se pudo guardar la corrección aprendida', e); }
-  }
+  await persistResolutions(map);
 }
 
 async function deleteResolution(effName){
   const map = await loadResolutions();
   delete map[effName];
   resolutionsCache = map;
-  if (hasStorage()){
-    try{ await window.storage.set('stateResolutions', JSON.stringify(map), false); }
-    catch(e){ console.error('No se pudo actualizar las correcciones aprendidas', e); }
-  }
+  await persistResolutions(map);
 }
 
 function fmtDate(iso){
@@ -257,6 +276,14 @@ function fmtDate(iso){
 async function renderResolutionsList(){
   const wrap = document.getElementById('resolutionsList');
   if (!wrap) return; // el contenedor todavía no está en el DOM en esta parte del flujo
+  const note = document.getElementById('resolutionsNote');
+  if (note){
+    note.textContent = hasStorage()
+      ? ''
+      : (hasLocalStorage()
+          ? 'Fuera del panel de chat, estas correcciones se guardan solo en este navegador (localStorage).'
+          : 'Este navegador no permite guardar nada de forma persistente; las correcciones se perderán al recargar.');
+  }
   const map = await loadResolutions();
   const entries = Object.entries(map);
   if (!entries.length){
