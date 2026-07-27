@@ -4,12 +4,29 @@
 > parte de PROJECT.md con normalidad. Si NO está vacío, hay trabajo a medias — lee esto
 > ANTES de tocar código, para no reimplementar o pisar algo ya empezado.
 
-## Estado: Nada en curso
+## Estado: En curso
 
-Última feature completada: hacer standalone las dos features pendientes (BYOK para Análisis con
-IA + localStorage para correcciones aprendidas). Ambas documentadas en PROJECT.md, sección
-"Principio de diseño: debe funcionar también fuera del panel de chat". Milestones 1/2 y 2/2
-commiteados y pusheados. Nada roto, nada a medio probar.
+**Feature/tarea:** Clasificación aliado/enemigo por combate del historial, para dejar de
+amalgamar sus totales en la comparativa (y en la línea resumen del historial).
+
+**Objetivo:** ver PROJECT.md, sección "Clasificación aliado/enemigo (en curso — ver ALCANCE)",
+que tiene el detalle completo del problema, la solución y qué toca/no toca.
+
+**Hecho hasta ahora:** nada commiteado todavía (acabo de escribir el alcance en PROJECT.md).
+
+**Falta por hacer (milestones, ver PROJECT.md):**
+1. `subsetPlayers`/`combatTotals` filtrable + modal `openRoleModal` + botón "Clasificar" por
+   entrada del historial (clasifica un único combate).
+2. Usar los roles en `renderComparison` (dividir Total del grupo en Aliados/Enemigos + aviso de
+   sin clasificar + etiqueta de bando por jugador).
+3. Pulido + cerrar PROJECT.md.
+
+**Dónde tocar:** `wakfu_calculadora_1.html` — buscar `combatTotals`, `renderHistoryList`,
+`renderComparison`.
+
+**Cualquier cosa rota/a medio probar ahora mismo:** nada roto.
+
+**Log de prueba usado:** ninguno necesario, no se toca el parser.
 
 ---
 

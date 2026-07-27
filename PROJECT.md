@@ -153,6 +153,65 @@ esta feature simplemente no tienen etiquetas y se muestran igual, sin romperse.
   una clave propia guardada en `localStorage` — ver "Principio de diseño: debe funcionar también
   fuera del panel de chat" al principio de este documento para el detalle.
 
+## Clasificación aliado/enemigo (en curso — ver ALCANCE)
+
+**Problema:** el chat del juego no distingue quién es aliado y quién es enemigo — el log solo
+dice nombres. Por eso los totales de grupo actuales (`combatTotals`, usados en la línea resumen
+del historial y en "Total del grupo" de la comparativa) suman a todo el mundo junto: el daño
+hecho por tu equipo y el daño hecho por los enemigos que os pegan entre ellos (raro pero posible),
+etc. El síntoma más visible: en la comparativa, "Daño hecho" del grupo y "Daño recibido" del
+grupo salen siempre con el mismo número exacto, porque todo daño hecho por alguien es recibido
+por alguien más dentro del mismo conjunto de nombres.
+
+**Solución elegida:** ya que no se puede inferir del texto del log (ver "Formato del log" — no
+hay ninguna marca de bando), se pide una clasificación manual mínima: un modal, abierto desde el
+historial o desde la comparativa, que lista los nombres de los jugadores implicados y deja
+marcar cada uno como Aliado o Enemigo con un botón. Se guarda en el propio combate del historial
+(`entry.roles = { nombreJugador: 'aliado' | 'enemigo' }`), así que se clasifica una vez y queda
+guardado. Nunca se adivina: un nombre sin clasificar se trata como "sin clasificar" y se excluye
+de los totales de Aliados/Enemigos (mismo espíritu que los eventos "ambiguos" de `resolveSource`
+— no atribuir con una suposición).
+
+### ALCANCE
+
+**Toca:**
+- Nuevo campo `entry.roles` en las entradas del historial (objeto vacío `{}` en las nuevas, y
+  tratado como vacío en las antiguas que no lo tengan — no rompe combates ya guardados).
+- `combatTotals` gana un modo para sumar solo un subconjunto de nombres (aliados / enemigos /
+  sin clasificar), vía un helper `subsetPlayers(players, names)` — sin tocar su firma actual en
+  las llamadas que no necesitan el filtro.
+- `renderHistoryList`: línea resumen por combate indica cuántos hay sin clasificar (si aplica) y
+  un botón "Clasificar" que abre el modal para los jugadores de ESE combate.
+- `renderComparison`: "Total del grupo" se divide en dos tablas, Aliados y Enemigos, más un
+  aviso de "sin clasificar" con acceso directo al modal si hace falta clasificar antes de ver
+  el desglose completo. La sección "por jugador" (comparación individual) no cambia de cálculo,
+  pero se le añade una etiqueta de bando junto al nombre cuando se conoce.
+- Nuevo modal reutilizable (`openRoleModal`), sin librería, con overlay `position:fixed` y
+  estilos inline (no hay sistema de modal previo en la app).
+
+**NO toca (explícitamente fuera de este alcance):**
+- `parseCombat` / `resolveSource`: el parser sigue sin saber de bandos, la clasificación es
+  100% manual y posterior al cálculo.
+- La vista de tendencia (`renderTrendUI`, opción "Total del grupo"): sigue amalgamando
+  aliados/enemigos igual que antes. Se deja así a propósito para no ampliar el alcance de esta
+  feature — queda anotado como limitación conocida (ver esa sección) para una posible feature
+  futura si hace falta.
+- El payload de Análisis con IA (es por jugador, no por grupo — no le afecta este problema).
+- El modo debug ni sus correcciones aprendidas.
+- El formato de exportación/importación del historial ya existente (los `.json` exportados
+  antes de esta feature se pueden seguir importando: simplemente no traen `roles`).
+
+**Milestones:**
+1. Modelo de datos + `subsetPlayers`/`combatTotals` filtrable + modal `openRoleModal` reutilizable
+   que clasifica los jugadores de un único combate del historial, con botón "Clasificar" por
+   entrada. La app debe seguir funcionando exactamente igual que antes en todo lo demás con este
+   milestone (comparativa aún sin dividir).
+2. Usar los roles guardados en `renderComparison`: dividir "Total del grupo" en Aliados/Enemigos,
+   aviso de sin clasificar con acceso directo al modal (aceptando los 2 combates comparados a la
+   vez), etiqueta de bando en la sección por jugador.
+3. Pulido: `roles: {}` por defecto al guardar un combate nuevo, aviso de sin clasificar también
+   en la línea resumen del historial, actualizar esta sección de PROJECT.md a estado terminado.
+
 ## Modo debug que aprende (alcance deliberadamente limitado)
 
 Antes, cada bug marcado en el modo debug se exportaba a JSON y había que pasárselo a Claude para
