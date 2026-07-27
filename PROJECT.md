@@ -91,6 +91,18 @@ Jefe, Mazmorra, Dificultad (texto libre, sin lista cerrada). Se muestran bajo el
 combate en el historial y en la cabecera de la comparativa. Los combates guardados antes de
 esta feature simplemente no tienen etiquetas y se muestran igual, sin romperse.
 
+- **Vista de tendencia**: bajo un desplegable "Ver vista de tendencia", en cuanto hay 3+
+  combates guardados aparece un gráfico de líneas (SVG, sin librerías externas) con dos
+  selectores — jugador (o "Total del grupo") y métrica (daño hecho/recibido, curación
+  hecha/recibida, derribos, % de crítico real) — que dibuja la evolución de esa métrica a lo
+  largo de los combates guardados, ordenados por fecha. Cada punto se colorea en verde/rojo
+  según si mejora o empeora respecto al punto anterior (misma lógica de "dirección buena"
+  que en la comparativa) y al pasar el ratón muestra el nombre y fecha del combate. Si el
+  jugador elegido no participó en algún combate guardado, ese combate simplemente no aporta
+  punto a la línea (no se inventa un cero ni rompe el gráfico) — por eso hacen falta al menos
+  2 combates con datos de ese jugador/métrica para poder dibujar algo. Con menos de 3
+  combates en el historial se muestra un aviso en vez del gráfico.
+
 ## Modo debug que aprende (alcance deliberadamente limitado)
 
 Antes, cada bug marcado en el modo debug se exportaba a JSON y había que pasárselo a Claude para
@@ -180,7 +192,8 @@ wakfu-calc/
       combates — alcance limitado a atribución, ver sección dedicada más arriba
 - [ ] Selector de idioma de la interfaz (ES/EN) — pendiente si se necesita
 - [ ] Revisar eventos marcados como bug en el modo debug cuando el usuario los exporte
-- [ ] Vista de tendencia (gráfico) cuando haya 3+ combates guardados — pendiente
+- [x] Vista de tendencia (gráfico SVG, jugador/métrica seleccionables) cuando haya 3+
+      combates guardados
 - [ ] IA que analice el historial y dé consejos concretos a partir de los deltas — pendiente
 - [x] Desglose por turno — descartado (el log no marca fin de turno de forma fiable, ver "Limitaciones conocidas")
 - [x] Etiquetar combates (jefe/mazmorra/dificultad) al guardarlos, mostradas en historial y comparativa

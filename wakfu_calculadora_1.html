@@ -125,6 +125,8 @@
   </div>
   <div id="historyNote" class="meta" style="margin-top:8px;"></div>
   <div id="compareWrap" style="margin-top:16px; display:none;"></div>
+  <div class="meta" style="margin-top:16px; cursor:pointer;" id="toggleTrend">▸ Ver vista de tendencia (evolución entre combates guardados)</div>
+  <div id="trendWrap" style="display:none; margin-top:10px;"></div>
 </div>
 
 <div class="card" id="resolutionsCard">
@@ -267,6 +269,7 @@ async function renderHistoryList(){
   if (!list.length){
     wrap.innerHTML = '<span style="color:var(--muted); font-size:13px;">Aún no hay combates guardados. Calcula uno y guárdalo abajo.</span>';
     updateCompareUI();
+    renderTrendUI(list);
     return;
   }
   const sorted = [...list].sort((a,b) => new Date(b.date) - new Date(a.date));
@@ -299,6 +302,144 @@ async function renderHistoryList(){
     });
   });
   updateCompareUI();
+  renderTrendUI(list);
+}
+
+// --- Vista de tendencia (evolución entre 3+ combates guardados) ---
+
+const TREND_METRICS = {
+  dmgDone:      { label: 'Daño hecho',       higherIsBetter: true,  isPct: false },
+  dmgReceived:  { label: 'Daño recibido',    higherIsBetter: false, isPct: false },
+  healDone:     { label: 'Curación hecha',   higherIsBetter: true,  isPct: false },
+  healReceived: { label: 'Curación recibida',higherIsBetter: true,  isPct: false },
+  kos:          { label: 'Derribos',         higherIsBetter: false, isPct: false },
+  critPct:      { label: '% Crítico',        higherIsBetter: true,  isPct: true  }
+};
+
+// Devuelve el valor de la métrica para un combate concreto, o null si no hay datos
+// (p.ej. un jugador que no participó en ese combate concreto).
+function trendValue(entry, playerName, metric){
+  if (playerName === '__total__'){
+    let dmgDone=0, dmgReceived=0, healDone=0, healReceived=0, kos=0, effSpells=0, effCrits=0;
+    for (const n in entry.players){
+      const p = entry.players[n];
+      dmgDone += p.dmgDone; dmgReceived += p.dmgReceived;
+      healDone += p.healDone; healReceived += p.healReceived; kos += p.koCount;
+      effSpells += p.effectSpells; effCrits += p.effectCrits;
+    }
+    if (metric === 'critPct') return effSpells ? (effCrits/effSpells*100) : null;
+    return { dmgDone, dmgReceived, healDone, healReceived, kos }[metric] ?? null;
+  }
+  const p = entry.players[playerName];
+  if (!p) return null;
+  if (metric === 'critPct') return p.effectSpells ? (p.effectCrits/p.effectSpells*100) : null;
+  return { dmgDone: p.dmgDone, dmgReceived: p.dmgReceived, healDone: p.healDone,
+    healReceived: p.healReceived, kos: p.koCount }[metric] ?? null;
+}
+
+function svgTrendChart(points, metric){
+  const def = TREND_METRICS[metric];
+  const W = Math.max(560, 90 + (points.length - 1) * 90 + 40);
+  const H = 260;
+  const padL = 56, padR = 20, padT = 24, padB = 56;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+
+  const values = points.map(p => p.value);
+  let min = Math.min(...values), max = Math.max(...values);
+  if (min === max){ const pad0 = Math.max(1, Math.abs(min) * 0.1); min -= pad0; max += pad0; }
+  const pad = (max - min) * 0.12;
+  min -= pad; max += pad;
+  const range = max - min;
+
+  const stepX = points.length > 1 ? plotW / (points.length - 1) : 0;
+  const xFor = i => padL + stepX * i;
+  const yFor = v => padT + plotH - ((v - min) / range) * plotH;
+  const fmt = v => def.isPct ? v.toFixed(1) + '%' : Math.round(v).toLocaleString('es-ES');
+
+  let gridHtml = '';
+  const ticks = 4;
+  for (let t = 0; t <= ticks; t++){
+    const v = min + range * (t / ticks);
+    const y = yFor(v);
+    gridHtml += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="var(--line)" stroke-width="1"/>`;
+    gridHtml += `<text x="${padL-8}" y="${y+4}" text-anchor="end" font-size="10" fill="var(--muted)">${fmt(v)}</text>`;
+  }
+
+  const polyPoints = points.map((p,i) => `${xFor(i)},${yFor(p.value)}`).join(' ');
+  let dotsHtml = '', labelsHtml = '';
+  points.forEach((p,i) => {
+    const x = xFor(i), y = yFor(p.value);
+    let dotColor = 'var(--accent)';
+    if (i > 0){
+      const delta = p.value - points[i-1].value;
+      const good = def.higherIsBetter ? delta > 0 : delta < 0;
+      const bad = def.higherIsBetter ? delta < 0 : delta > 0;
+      dotColor = delta === 0 ? 'var(--muted)' : (good ? 'var(--heal)' : (bad ? 'var(--dmg)' : 'var(--muted)'));
+    }
+    dotsHtml += `<circle cx="${x}" cy="${y}" r="4.5" fill="${dotColor}" stroke="var(--bg)" stroke-width="1.5"><title>${escapeHtml(p.name)} — ${fmtDate(p.date)}: ${fmt(p.value)}</title></circle>`;
+    const shortName = p.name.length > 12 ? p.name.slice(0,11) + '…' : p.name;
+    labelsHtml += `<text x="${x}" y="${H-padB+18}" text-anchor="middle" font-size="10" fill="var(--muted)" transform="rotate(-30 ${x} ${H-padB+18})">${escapeHtml(shortName)}</text>`;
+  });
+
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%; max-width:${W}px; height:${H}px; display:block;">
+    ${gridHtml}
+    <polyline points="${polyPoints}" fill="none" stroke="var(--accent)" stroke-width="2" opacity="0.85"/>
+    ${dotsHtml}
+    ${labelsHtml}
+    <text x="${padL}" y="14" font-size="11" fill="var(--muted)">${escapeHtml(def.label)} — ${points.length} combates</text>
+  </svg>`;
+}
+
+function drawTrendChart(list, playerName, metric){
+  const holder = document.getElementById('trendChartHolder');
+  if (!holder) return;
+  const sorted = [...list].sort((a,b) => new Date(a.date) - new Date(b.date));
+  const points = [];
+  for (const e of sorted){
+    const v = trendValue(e, playerName, metric);
+    if (v !== null && v !== undefined) points.push({ name: e.name, date: e.date, value: v });
+  }
+  if (points.length < 2){
+    const who = playerName === '__total__' ? 'el total del grupo' : escapeHtml(playerName);
+    holder.innerHTML = `<div class="meta">No hay suficientes combates con datos de ${who} para esta métrica todavía.</div>`;
+    return;
+  }
+  holder.innerHTML = svgTrendChart(points, metric);
+}
+
+function renderTrendUI(list){
+  const wrap = document.getElementById('trendWrap');
+  if (!wrap) return;
+  if (list.length < 3){
+    wrap.innerHTML = `<div class="meta">Guarda al menos 3 combates para ver aquí cómo evolucionas entre uno y otro.</div>`;
+    return;
+  }
+  const allPlayers = [...new Set(list.flatMap(e => Object.keys(e.players)))].sort((a,b) => a.localeCompare(b,'es'));
+  const prevPlayer = document.getElementById('trendPlayerSelect')?.value;
+  const prevMetric = document.getElementById('trendMetricSelect')?.value;
+
+  wrap.innerHTML = `
+    <div class="filters">
+      <select id="trendPlayerSelect">
+        <option value="__total__">Total del grupo</option>
+        ${allPlayers.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('')}
+      </select>
+      <select id="trendMetricSelect">
+        ${Object.entries(TREND_METRICS).map(([k,d]) => `<option value="${k}">${escapeHtml(d.label)}</option>`).join('')}
+      </select>
+    </div>
+    <div id="trendChartHolder" style="margin-top:12px;"></div>
+  `;
+  const playerSel = document.getElementById('trendPlayerSelect');
+  const metricSel = document.getElementById('trendMetricSelect');
+  if (prevPlayer && (prevPlayer === '__total__' || allPlayers.includes(prevPlayer))) playerSel.value = prevPlayer;
+  if (prevMetric && TREND_METRICS[prevMetric]) metricSel.value = prevMetric;
+
+  const draw = () => drawTrendChart(list, playerSel.value, metricSel.value);
+  playerSel.addEventListener('change', draw);
+  metricSel.addEventListener('change', draw);
+  draw();
 }
 
 function updateCompareUI(){
@@ -1116,6 +1257,13 @@ function makeSortable(table){
 // --- Inicialización del historial (independiente de que haya un cálculo cargado) ---
 renderHistoryList();
 renderResolutionsList();
+
+document.getElementById('toggleTrend').addEventListener('click', function(){
+  const w = document.getElementById('trendWrap');
+  const open = w.style.display !== 'none';
+  w.style.display = open ? 'none' : 'block';
+  this.textContent = (open ? '▸' : '▾') + ' Ver vista de tendencia (evolución entre combates guardados)';
+});
 
 document.getElementById('btnExportHistory').addEventListener('click', async () => {
   const list = await loadHistory();
