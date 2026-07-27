@@ -103,6 +103,22 @@ esta feature simplemente no tienen etiquetas y se muestran igual, sin romperse.
   2 combates con datos de ese jugador/métrica para poder dibujar algo. Con menos de 3
   combates en el historial se muestra un aviso en vez del gráfico.
 
+- **Análisis con IA**: en el panel de resultados de un combate recién calculado, junto a
+  "Guardar en historial", hay un botón "Analizar con IA". Al pulsarlo, la propia herramienta
+  llama directamente a la API de Claude (sin clave, sin coste aparte — consume el uso normal
+  de la cuenta con la que se está usando la herramienta, igual que cualquier "AI-powered
+  artifact") pasándole, por cada jugador del combate actual, sus números junto con la media de
+  ese mismo jugador en el historial guardado (si existe) y el cambio porcentual frente a esa
+  media. Con eso, la IA devuelve hasta 3 consejos concretos en texto, priorizando los cambios
+  más grandes y el peor rendimiento relativo — no consejos genéricos tipo "sigue practicando".
+  Si un jugador no tiene combates previos guardados, se le indica explícitamente a la IA que no
+  invente una comparación para él. La respuesta se cachea en memoria durante la sesión (no en
+  `window.storage`) para no repetir la llamada por accidente si se pulsa el botón dos veces;
+  hay un enlace "Volver a generar" para forzar una llamada nueva a propósito. Al igual que el
+  guardado automático del historial, **solo funciona dentro del panel de chat de Claude** — si
+  se abre el `.html` suelto en el navegador, el botón falla con un aviso explicando por qué, en
+  vez de un error confuso.
+
 ## Modo debug que aprende (alcance deliberadamente limitado)
 
 Antes, cada bug marcado en el modo debug se exportaba a JSON y había que pasárselo a Claude para
@@ -194,7 +210,8 @@ wakfu-calc/
 - [ ] Revisar eventos marcados como bug en el modo debug cuando el usuario los exporte
 - [x] Vista de tendencia (gráfico SVG, jugador/métrica seleccionables) cuando haya 3+
       combates guardados
-- [ ] IA que analice el historial y dé consejos concretos a partir de los deltas — pendiente
+- [x] IA que analiza el historial y da consejos concretos a partir de los deltas (botón
+      "Analizar con IA", llamada directa a la API de Claude sin clave, caché en memoria)
 - [x] Desglose por turno — descartado (el log no marca fin de turno de forma fiable, ver "Limitaciones conocidas")
 - [x] Etiquetar combates (jefe/mazmorra/dificultad) al guardarlos, mostradas en historial y comparativa
 - [x] Ratios de eficiencia: daño medio por hechizo con efecto, y daño hecho ÷ recibido (en "Datos avanzados")

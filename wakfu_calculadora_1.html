@@ -259,6 +259,136 @@ function combatTotals(players){
   return { dmgDone, dmgReceived, healDone, healReceived, kos, mvp, mvpDmg };
 }
 
+// --- Análisis con IA: media histórica por jugador, deltas %, y payload compacto para el prompt ---
+
+function computePlayerHistoryAvg(history, playerName){
+  const samples = [];
+  for (const e of history){
+    const p = e.players[playerName];
+    if (!p) continue;
+    samples.push({
+      dmgDone: p.dmgDone, dmgReceived: p.dmgReceived, healDone: p.healDone,
+      healReceived: p.healReceived, koCount: p.koCount,
+      critPct: p.effectSpells ? (p.effectCrits / p.effectSpells * 100) : null
+    });
+  }
+  if (!samples.length) return null;
+  const avg = key => samples.reduce((s,x) => s + (x[key] || 0), 0) / samples.length;
+  const critSamples = samples.filter(s => s.critPct !== null);
+  return {
+    n: samples.length,
+    dmgDone: avg('dmgDone'), dmgReceived: avg('dmgReceived'), healDone: avg('healDone'),
+    healReceived: avg('healReceived'), koCount: avg('koCount'),
+    critPct: critSamples.length ? critSamples.reduce((s,x) => s + x.critPct, 0) / critSamples.length : null
+  };
+}
+
+// % de cambio del valor actual frente a la media histórica. null si no hay media o el valor
+// actual no existe (p.ej. % crítico sin hechizos con efecto). Evita división por cero.
+function pctChange(current, avg){
+  if (current === null || current === undefined) return null;
+  if (avg === null || avg === undefined) return null;
+  if (avg === 0) return current === 0 ? 0 : null;
+  return Math.round(((current - avg) / Math.abs(avg)) * 1000) / 10;
+}
+
+function buildAIPayload(players, history){
+  const jugadores = [];
+  for (const n in players){
+    const p = players[n];
+    const critPct = p.effectSpells ? Math.round(p.effectCrits / p.effectSpells * 1000) / 10 : null;
+    const hist = computePlayerHistoryAvg(history, n);
+    jugadores.push({
+      jugador: n,
+      combate_actual: {
+        dano_hecho: p.dmgDone, dano_recibido: p.dmgReceived, curacion_hecha: p.healDone,
+        curacion_recibida: p.healReceived, derribos: p.koCount, pct_critico: critPct
+      },
+      media_historica: hist ? {
+        combates_usados: hist.n,
+        dano_hecho: Math.round(hist.dmgDone), dano_recibido: Math.round(hist.dmgReceived),
+        curacion_hecha: Math.round(hist.healDone), curacion_recibida: Math.round(hist.healReceived),
+        derribos: Math.round(hist.koCount * 10) / 10,
+        pct_critico: hist.critPct !== null ? Math.round(hist.critPct * 10) / 10 : null
+      } : null,
+      delta_pct_vs_media: hist ? {
+        dano_hecho: pctChange(p.dmgDone, hist.dmgDone),
+        dano_recibido: pctChange(p.dmgReceived, hist.dmgReceived),
+        curacion_hecha: pctChange(p.healDone, hist.healDone),
+        pct_critico: pctChange(critPct, hist.critPct)
+      } : null
+    });
+  }
+  return { combates_en_historial: history.length, jugadores };
+}
+
+function buildAIPrompt(payload){
+  return 'Eres un analista de combates del videojuego Wakfu. Te paso datos numéricos YA CALCULADOS '
+    + 'de un combate reciente, con la media histórica de cada jugador (si existe) y el cambio '
+    + 'porcentual frente a esa media (campo delta_pct_vs_media). Da como máximo 3 consejos concretos '
+    + 'y accionables en español, priorizando los cambios porcentuales más grandes (buenos o malos) y '
+    + 'el peor rendimiento relativo. Interpreta los números, no los repitas tal cual. Si un jugador '
+    + 'tiene media_historica: null, no inventes una comparación para él, coméntalo solo por sus '
+    + 'valores absolutos si aporta algo. No devuelvas JSON ni markdown: solo una lista numerada en '
+    + 'texto plano, cada consejo de 1-2 frases.\n\nDatos:\n' + JSON.stringify(payload);
+}
+
+function renderAITips(text){
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return '<div class="meta">La IA no ha devuelto texto.</div>';
+  return `<ul style="padding-left:18px; margin:0; font-size:13px; line-height:1.7;">`
+    + lines.map(l => `<li>${escapeHtml(l.replace(/^\d+[\.\)]\s*/, ''))}</li>`).join('')
+    + `</ul>`;
+}
+
+let aiAnalysisCache = {}; // clave startLine||endLine -> HTML de consejos ya generado en esta sesión
+
+function showAITipsWithRegen(out, tipsHtml){
+  out.innerHTML = tipsHtml + '<div class="meta" style="margin-top:8px; cursor:pointer;" id="aiRegenLink">↻ Volver a generar (gasta otra llamada a la IA)</div>';
+  const link = document.getElementById('aiRegenLink');
+  if (link) link.addEventListener('click', () => runAIAnalysis(true));
+}
+
+async function runAIAnalysis(force){
+  const btn = document.getElementById('btnAnalyzeAI');
+  const out = document.getElementById('aiAnalysisResult');
+  if (!currentResult || !btn || !out) return;
+  const cacheKey = currentResult.startLine + '||' + currentResult.endLine;
+  if (!force && aiAnalysisCache[cacheKey]){
+    showAITipsWithRegen(out, aiAnalysisCache[cacheKey]);
+    return;
+  }
+  btn.disabled = true;
+  out.innerHTML = '<span style="color:var(--muted); font-size:13px;">Pensando…</span>';
+  try{
+    const history = await loadHistory();
+    const payload = buildAIPayload(currentResult.players, history);
+    const prompt = buildAIPrompt(payload);
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const data = await response.json();
+    const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+    if (!text.trim()) throw new Error('respuesta vacía');
+    const tipsHtml = renderAITips(text);
+    aiAnalysisCache[cacheKey] = tipsHtml;
+    showAITipsWithRegen(out, tipsHtml);
+  } catch(err){
+    out.innerHTML = `<div class="meta" style="color:var(--dmg);">No se ha podido generar el `
+      + `análisis (${escapeHtml(err && err.message ? err.message : 'error desconocido')}). Esta `
+      + `función solo funciona dentro del panel de chat de Claude, no al abrir el .html suelto.</div>`;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function renderHistoryList(){
   const list = await loadHistory();
   const wrap = document.getElementById('historyList');
@@ -1034,6 +1164,15 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
       <button class="primary" id="btnSaveHistory" style="margin-top:4px;">Guardar en historial</button>
       <div id="saveStatus" style="font-size:12px; color:var(--muted); margin-top:8px;"></div>
     </div>
+    <div class="card" style="margin-top:20px;">
+      <label>Análisis con IA</label>
+      <div class="meta" style="margin-top:-6px; margin-bottom:10px;">Compara este combate con la
+        media de tu historial guardado y te da hasta 3 consejos concretos de dónde poner el foco.
+        Usa tu uso normal de Claude — sin clave de API, sin coste aparte. Solo funciona aquí, en
+        el panel de chat (no al abrir el .html descargado por tu cuenta).</div>
+      <button class="primary" id="btnAnalyzeAI">Analizar con IA</button>
+      <div id="aiAnalysisResult" style="margin-top:12px;"></div>
+    </div>
   `;
 
   makeSortable(document.getElementById('mainTable'));
@@ -1210,6 +1349,8 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
     status.textContent = 'Guardado ✓';
     renderHistoryList();
   });
+
+  document.getElementById('btnAnalyzeAI').addEventListener('click', () => runAIAnalysis(false));
 }
 
 function escapeHtml(s){
