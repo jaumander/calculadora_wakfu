@@ -2,81 +2,194 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Calculadora de Combate — Wakfu</title>
 <style>
   :root{
-    --bg:#0d1420; --panel:#141d2e; --panel2:#1b2740; --line:#2a3a56;
-    --text:#e7edf5; --muted:#8fa2bd; --accent:#5ec9c2; --accent2:#e2b23c;
+    /* superficies — panel de madera/pizarra oscura */
+    --bg:#0f141a; --bg2:#161c24;
+    --panel:#1b222c; --panel-hi:#222b37; --panel2:#141a22; --line:#333e4d; --line-soft:#28313d;
+    /* texto */
+    --text:#e9e4d8; --text-dim:#c3bdae; --muted:#8b93a0;
+    /* acentos: teal estructural, oro interactivo */
+    --accent:#57b3c4; --accent-dim:#2e7f92; --accent2:#d8b45f; --gold:#d8b45f; --gold-dim:#8a6d2f;
     --dmg:#e2603c; --heal:#5ecf7a; --crit:#e2b23c;
     --fuego:#e2572b; --agua:#3d94d6; --tierra:#b0813f; --aire:#6fd9be;
     --estasis:#a97ce0; --luz:#e8c95e; --neutral:#9c988c;
+    --r:10px; --shadow:0 10px 30px -12px #000a, 0 2px 0 #ffffff0a inset;
+    --serif:Georgia,'Iowan Old Style','Palatino Linotype','Book Antiqua',serif;
+    --sans:'Segoe UI',system-ui,-apple-system,sans-serif;
   }
-  .dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; vertical-align:middle; }
   *{box-sizing:border-box;}
+  html{ -webkit-text-size-adjust:100%; }
   body{
-    margin:0; background:var(--bg); color:var(--text);
-    font-family:'Segoe UI',system-ui,sans-serif; padding:32px 20px 80px;
+    margin:0; color:var(--text); font-family:var(--sans);
+    padding:0 clamp(12px,3vw,28px) 96px;
+    background:
+      radial-gradient(1200px 600px at 50% -240px, #1d2a36 0%, transparent 70%),
+      linear-gradient(var(--bg), var(--bg2));
+    background-attachment:fixed;
+    text-wrap:pretty;
+  }
+  ::selection{ background:var(--gold); color:#1a1409; }
+
+  /* ---------- cabecera tipo HUD ---------- */
+  .topbar{
+    max-width:1180px; margin:0 auto; padding:clamp(20px,4vw,34px) 2px clamp(18px,3vw,26px);
+    display:flex; flex-wrap:wrap; align-items:flex-end; gap:6px 18px;
+    border-bottom:1px solid var(--line-soft);
+    margin-bottom:clamp(18px,3vw,28px);
   }
   h1{
-    font-size:22px; letter-spacing:.5px; margin:0 0 4px; color:var(--accent);
-    font-weight:700; text-transform:uppercase;
+    font-family:var(--serif); font-size:clamp(22px,3.4vw,32px); line-height:1.1;
+    letter-spacing:.02em; margin:0; color:var(--text); font-weight:700; text-transform:none;
+    text-shadow:0 2px 0 #0008;
   }
-  .sub{color:var(--muted); font-size:13px; margin-bottom:28px;}
+  h1 .mark{ color:var(--gold); }
+  .sub{ color:var(--muted); font-size:13.5px; margin:0; flex:1 1 320px; max-width:62ch; }
+
+  /* ---------- paneles ---------- */
   .card{
-    background:var(--panel); border:1px solid var(--line); border-radius:10px;
-    padding:20px; max-width:760px; margin:0 auto 20px;
+    background:linear-gradient(var(--panel-hi), var(--panel));
+    border:1px solid var(--line); border-radius:var(--r);
+    padding:clamp(16px,2.6vw,22px); max-width:1180px; margin:0 auto 18px;
+    box-shadow:var(--shadow); position:relative;
   }
-  label{display:block; font-size:12px; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.5px;}
+  /* título de tarjeta = label hijo directo (los labels de campo van anidados) */
+  .card > label:first-child{
+    font-family:var(--serif); font-size:16px; font-weight:700; letter-spacing:.01em;
+    text-transform:none; color:var(--text); margin:0 0 14px;
+    padding-bottom:9px; border-bottom:1px solid var(--line-soft);
+    display:flex; align-items:center; gap:9px;
+  }
+  .card > label:first-child::before{
+    content:''; width:4px; height:15px; border-radius:2px; flex:none;
+    background:linear-gradient(var(--accent), var(--accent-dim));
+  }
+  label{ display:block; font-size:11px; color:var(--muted); margin-bottom:6px;
+    text-transform:uppercase; letter-spacing:.08em; font-weight:600; }
+
   input[type=text]{
     width:100%; background:var(--panel2); border:1px solid var(--line); color:var(--text);
-    padding:9px 10px; border-radius:6px; font-size:14px; margin-bottom:14px;
+    padding:10px 12px; border-radius:7px; font-size:14px; margin-bottom:14px;
+    font-family:var(--sans); transition:border-color .15s, box-shadow .15s;
   }
+  input[type=text]:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px #57b3c422; }
+  input[type=text]::placeholder{ color:#6c7583; }
+  input[type=checkbox]{ accent-color:var(--accent); width:15px; height:15px; cursor:pointer; }
+
   .drop{
-    border:2px dashed var(--line); border-radius:8px; padding:26px; text-align:center;
-    cursor:pointer; margin-bottom:16px; transition:.15s;
+    border:2px dashed var(--line); border-radius:9px; padding:clamp(20px,4vw,30px);
+    text-align:center; cursor:pointer; margin-bottom:16px; font-size:14px; color:var(--text-dim);
+    background:#0e131a66; transition:border-color .15s, background .15s, color .15s;
   }
-  .drop:hover, .drop.drag{ border-color:var(--accent); background:#16203350; }
-  .drop .fname{ color:var(--accent); font-size:13px; margin-top:6px; }
-  .row{display:flex; gap:12px;}
-  .row > div{flex:1;}
+  .drop:hover, .drop.drag{ border-color:var(--gold); background:#d8b45f10; color:var(--text); }
+  .drop .fname{ color:var(--accent); font-size:13px; margin-top:8px; word-break:break-all; }
+
+  .row{ display:flex; gap:14px; flex-wrap:wrap; }
+  .row > div{ flex:1 1 220px; min-width:0; }
+
+  /* ---------- botones ---------- */
   button{
-    font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:.5px;
-    padding:10px 18px; border-radius:6px; border:none; cursor:pointer; margin-right:8px;
+    font-size:12.5px; font-weight:700; letter-spacing:.05em; font-family:var(--sans);
+    padding:10px 18px; border-radius:7px; border:1px solid transparent; cursor:pointer;
+    margin:0 8px 8px 0; transition:filter .15s, background .15s, color .15s, border-color .15s;
   }
-  .primary{ background:var(--accent); color:#08201d; }
-  .ghost{ background:transparent; color:var(--muted); border:1px solid var(--line); }
-  .primary:disabled{opacity:.4; cursor:not-allowed;}
-  #status{ font-size:13px; color:var(--muted); margin-top:12px; min-height:18px; }
-  #results{ max-width:960px; margin:0 auto; }
-  table{ width:100%; border-collapse:collapse; font-size:13px; }
-  th,td{ padding:9px 10px; text-align:right; border-bottom:1px solid var(--line); }
+  button:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .primary{
+    background:linear-gradient(var(--gold), var(--gold-dim)); color:#1d1608;
+    border-color:#00000055; box-shadow:0 1px 0 #ffffff40 inset;
+  }
+  .primary:hover:not(:disabled){ filter:brightness(1.1); }
+  .primary:active:not(:disabled){ filter:brightness(.94); }
+  .primary:disabled{ opacity:.35; cursor:not-allowed; }
+  .ghost{ background:#ffffff08; color:var(--text-dim); border:1px solid var(--line); }
+  .ghost:hover{ background:#ffffff12; color:var(--text); border-color:var(--gold); }
+
+  #status{ font-size:13px; color:var(--muted); margin-top:8px; min-height:18px; }
+  #results{ max-width:1180px; margin:0 auto; }
+
+  /* ---------- tablas ---------- */
+  table{ width:100%; border-collapse:collapse; font-size:13px;
+    font-variant-numeric:tabular-nums; margin:2px 0 4px; }
+  th,td{ padding:9px 11px; text-align:right; border-bottom:1px solid var(--line-soft); }
   th:first-child, td:first-child{ text-align:left; }
-  th{ color:var(--muted); font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:.5px; }
+  th{
+    color:var(--muted); font-weight:700; text-transform:uppercase; font-size:10.5px;
+    letter-spacing:.08em; position:sticky; top:0; z-index:2;
+    background:var(--panel-hi); border-bottom:1px solid var(--line);
+    white-space:nowrap;
+  }
   th.sortable{ cursor:pointer; user-select:none; }
-  th.sortable:hover{ color:var(--accent); }
+  th.sortable:hover{ color:var(--gold); }
   th.sortable .arrow{ opacity:.4; font-size:10px; margin-left:3px; }
-  th.sortable.active .arrow{ opacity:1; color:var(--accent); }
-  .filters{ display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap; align-items:center; }
+  th.sortable.active{ color:var(--gold); }
+  th.sortable.active .arrow{ opacity:1; color:var(--gold); }
+  tbody tr{ transition:background .12s; }
+  tr:hover td{ background:#ffffff08; }
+  tr[title], td[title]{ cursor:help; }
+  td:first-child{ font-weight:600; color:var(--text); }
+
+  .dot{ display:inline-block; width:9px; height:9px; border-radius:50%;
+    margin-right:6px; vertical-align:middle; box-shadow:0 0 0 1px #0006; }
+  .dmg{ color:var(--dmg); } .heal{ color:var(--heal); } .crit{ color:var(--crit); }
+
+  /* ---------- filtros / toggles ---------- */
+  .filters{ display:flex; gap:9px; margin:14px 0 10px; flex-wrap:wrap; align-items:center; }
   .filters select, .filters input[type=text]{
     background:var(--panel2); border:1px solid var(--line); color:var(--text);
-    padding:6px 8px; border-radius:5px; font-size:12px;
+    padding:7px 9px; border-radius:6px; font-size:12px; margin:0; width:auto;
+    font-family:var(--sans);
   }
+  .filters select:focus, .filters input[type=text]:focus{ outline:none; border-color:var(--accent); }
   .toggleBtn{
-    font-size:11px; text-transform:uppercase; letter-spacing:.4px; background:var(--panel2);
-    border:1px solid var(--line); color:var(--muted); padding:6px 10px; border-radius:5px; cursor:pointer;
+    font-size:11px; text-transform:uppercase; letter-spacing:.06em; font-weight:700;
+    background:#ffffff08; border:1px solid var(--line); color:var(--muted);
+    padding:6px 11px; border-radius:6px; cursor:pointer; margin:0;
   }
-  .toggleBtn.on{ color:var(--accent); border-color:var(--accent); }
-  tr:hover td{ background:#ffffff06; }
-  tr[title], td[title]{ cursor: help; }
-  .dmg{ color:var(--dmg); } .heal{ color:var(--heal); } .crit{ color:var(--crit); }
-  .meta{ color:var(--muted); font-size:12px; margin:14px 0 20px; }
+  .toggleBtn:hover{ color:var(--text); border-color:var(--gold); }
+  .toggleBtn.on{ color:#1d1608; background:linear-gradient(var(--gold), var(--gold-dim));
+    border-color:#00000055; }
+
+  .meta{ color:var(--muted); font-size:12.5px; line-height:1.6; margin:14px 0 18px; }
   .export{ margin-top:18px; }
+  a{ color:var(--accent); }
+  a:hover{ color:var(--gold); }
+  code{ background:#0e131a; border:1px solid var(--line-soft); border-radius:4px;
+    padding:1px 5px; font-size:12px; color:var(--text-dim); word-break:break-all; }
+  ol li::marker{ color:var(--gold); font-weight:700; }
+
+  /* barras de scroll */
+  *::-webkit-scrollbar{ width:11px; height:11px; }
+  *::-webkit-scrollbar-track{ background:#0e131a; }
+  *::-webkit-scrollbar-thumb{ background:#3a4553; border-radius:6px; border:2px solid #0e131a; }
+  *::-webkit-scrollbar-thumb:hover{ background:var(--gold-dim); }
+
+  /* ---------- responsive ---------- */
+  @media (max-width:900px){
+    /* las tablas anchas pasan a scroll horizontal en vez de romper el layout */
+    table{ display:block; overflow-x:auto; -webkit-overflow-scrolling:touch; white-space:nowrap; }
+    th{ position:static; }
+  }
+  @media (max-width:640px){
+    body{ padding-bottom:64px; }
+    .topbar{ padding-top:20px; }
+    button{ padding:11px 14px; min-height:42px; }
+    .toggleBtn{ min-height:34px; }
+    .card{ padding:15px; border-radius:8px; }
+    th,td{ padding:8px 9px; }
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{ transition:none !important; animation:none !important; }
+  }
 </style>
 </head>
 <body>
 
-<h1>Calculadora de Combate</h1>
-<div class="sub">Lee tu log de chat de Wakfu y calcula daño / curación por jugador entre dos palabras clave</div>
+<header class="topbar">
+  <h1>Calculadora de <span class="mark">Combate</span></h1>
+  <p class="sub">Lee tu log de chat de Wakfu y calcula daño / curación por jugador entre dos palabras clave.</p>
+</header>
 
 <div class="card">
   <label style="margin-bottom:10px;">Cómo se usa</label>
