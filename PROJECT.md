@@ -13,6 +13,66 @@ desglose de daño/curación por hechizo con su elemento dominante.
 
 Todo se procesa en el propio navegador; no se sube nada a ningún servidor.
 
+## Principio de diseño: debe funcionar también fuera del panel de chat (standalone)
+
+La herramienta se distribuye como un único `.html` sin dependencias — parte de su razón de ser es
+que cualquiera pueda descargarlo y abrirlo directamente en su navegador, sin depender de estar
+dentro del panel de chat de Claude. Por eso, **ninguna feature debe depender EXCLUSIVAMENTE de una
+capacidad que solo existe dentro del artifact** (`window.storage`, la llamada a la API de Claude
+sin clave) sin ofrecer una alternativa razonable fuera de él, aunque sea más manual. El patrón ya
+usado para el historial (guardado automático dentro del panel / exportar-importar JSON fuera) es
+el modelo a seguir: detectar el contexto con `hasStorage()` y degradar de forma explícita y
+avisada, nunca en silencio.
+
+**Estado real a día de hoy (no se cumple del todo):**
+- ✅ **Historial persistente**: cumple — botones "Exportar historial"/"Importar historial" como
+  alternativa fuera del panel, con nota explicando la limitación.
+- ⚠️ **Correcciones de atribución aprendidas** (`stateResolutions`): NO cumple — hoy, si no hay
+  `window.storage`, `resolutionsCache` se queda vacío en cada carga sin avisar de nada. El usuario
+  puede confirmar una corrección en el modo debug y verla desaparecer al recargar la página sin
+  ninguna explicación.
+- ⚠️ **Análisis con IA**: NO cumple — hoy, fuera del panel, el botón "Analizar con IA" siempre
+  falla (el `fetch` sin API key solo funciona dentro del artifact) y el motivo solo se explica en
+  el mensaje de error, sin ninguna alternativa funcional.
+
+### Diseño propuesto para arreglar esto (teorizado, pendiente de decisión antes de implementar)
+
+**Correcciones aprendidas → `localStorage` como plan B.** Es un simple mapa `{estado: jugador}`
+que no necesita compartirse entre dispositivos como el historial, así que no hace falta
+exportar/importar: basta con que, cuando `!hasStorage()`, `loadResolutions`/`saveResolution`/
+`deleteResolution` lean y escriban en `localStorage` (clave propia, ej. `wakfu_calc_resolutions`)
+en vez de quedarse solo en memoria. Se añadiría una nota junto a la tarjeta, igual que la del
+historial, explicando que fuera del panel se guarda solo en este navegador.
+
+**Análisis con IA → "trae tu propia clave" (BYOK) como plan B.** Confirmado contra la
+documentación de Anthropic: la API de Claude admite llamadas directas desde el navegador si se
+añade la cabecera `anthropic-dangerous-direct-browser-access: true` junto con `x-api-key: <clave>`
+y `anthropic-version: 2023-06-01` — es el mecanismo oficial pensado exactamente para herramientas
+"bring your own key" como esta. Propuesta concreta:
+
+1. Cuando `!hasStorage()` y no hay clave guardada, el botón "Analizar con IA" se sustituye por un
+   campo para pegar una clave de `console.anthropic.com` + botón "Guardar clave", con una nota
+   explicando que se guarda solo en este navegador y nunca se envía a ningún sitio salvo
+   directamente a `api.anthropic.com`. Enlace "Olvidar clave" para borrarla.
+2. Con la clave guardada, se reutiliza tal cual el mismo `buildAIPayload`/`buildAIPrompt` ya
+   construido — solo cambian las cabeceras del `fetch` (se añaden `x-api-key`, `anthropic-version`
+   y la cabecera de acceso directo desde navegador) y el modelo se sigue fijando explícitamente
+   (`claude-sonnet-4-6`, igual que dentro del panel).
+3. **Matiz de seguridad a no ignorar:** el origen de `localStorage` para páginas abiertas con
+   `file://` es inconsistente entre navegadores (en algunos, todas las páginas locales abiertas
+   así pueden compartir almacenamiento). Para uso personal en un único navegador el riesgo es
+   bajo, pero conviene decirlo en la interfaz: la clave NO viaja dentro del `.html` cuando se
+   comparte con otra persona (vive en el navegador de quien la guardó, no en el archivo), así que
+   quien reciba el archivo tendría que pegar la suya propia. Es bueno para evitar fugas
+   accidentales, pero hay que dejarlo explícito para que no sorprenda.
+4. **Alternativa más conservadora, sin `localStorage` en absoluto:** pedir la clave cada vez que
+   se pulse "Analizar con IA" y mantenerla solo en memoria durante la sesión (igual que ya hace la
+   caché de respuestas de IA). Más incómodo de usar, pero elimina cualquier duda sobre
+   persistencia de una clave sensible.
+
+No se ha implementado todavía — falta decidir entre guardar la clave en `localStorage` (opción 3,
+más cómoda) o no guardarla nunca (opción 4, más conservadora) antes de tocar código.
+
 ## Formato del log — confirmado con datos reales, no supuesto
 
 A diferencia de una reconstrucción basada en documentación de terceros, cada patrón de este
@@ -117,7 +177,8 @@ esta feature simplemente no tienen etiquetas y se muestran igual, sin romperse.
   hay un enlace "Volver a generar" para forzar una llamada nueva a propósito. Al igual que el
   guardado automático del historial, **solo funciona dentro del panel de chat de Claude** — si
   se abre el `.html` suelto en el navegador, el botón falla con un aviso explicando por qué, en
-  vez de un error confuso.
+  vez de un error confuso. *(Pendiente de arreglar — ver "Principio de diseño: debe funcionar
+  también fuera del panel de chat" al principio de este documento.)*
 
 ## Modo debug que aprende (alcance deliberadamente limitado)
 
