@@ -12,11 +12,13 @@ amalgamar sus totales en la comparativa (y en la línea resumen del historial).
 **Objetivo:** ver PROJECT.md, sección "Clasificación aliado/enemigo (en curso — ver ALCANCE)",
 que tiene el detalle completo del problema, la solución y qué toca/no toca.
 
-**Hecho hasta ahora:** nada commiteado todavía (acabo de escribir el alcance en PROJECT.md).
+**Hecho hasta ahora:**
+- 1/3: `subsetPlayers`, `splitByRole` (helpers puros, probados con Node), modal reutilizable
+  `openRoleModal(entryIds, onSaved)` con overlay + toggles Aliado/Enemigo, botón "Clasificar"
+  por entrada del historial que lo abre para ese combate. Persiste en `entry.roles`. Todavía NO
+  se usa en la comparativa (milestone 2).
 
 **Falta por hacer (milestones, ver PROJECT.md):**
-1. `subsetPlayers`/`combatTotals` filtrable + modal `openRoleModal` + botón "Clasificar" por
-   entrada del historial (clasifica un único combate).
 2. Usar los roles en `renderComparison` (dividir Total del grupo en Aliados/Enemigos + aviso de
    sin clasificar + etiqueta de bando por jugador).
 3. Pulido + cerrar PROJECT.md.
