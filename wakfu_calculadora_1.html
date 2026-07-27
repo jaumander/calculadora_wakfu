@@ -828,17 +828,36 @@ async function renderComparison(idA, idB){
   const wrap = document.getElementById('compareWrap');
   if (!eA || !eB){ wrap.innerHTML = ''; return; }
 
-  const totA = combatTotals(eA.players);
-  const totB = combatTotals(eB.players);
+  const splitA = splitByRole(eA);
+  const splitB = splitByRole(eB);
+
+  function groupTable(titulo, namesA, namesB){
+    if (!namesA.length && !namesB.length) return '';
+    const tA = combatTotals(subsetPlayers(eA.players, namesA));
+    const tB = combatTotals(subsetPlayers(eB.players, namesB));
+    return `<div class="meta" style="margin-top:14px; font-weight:600; color:var(--text);">Total del grupo — ${escapeHtml(titulo)}</div>
+      <table><thead><tr><th></th><th>${escapeHtml(eA.name)}</th><th>${escapeHtml(eB.name)}</th><th>Cambio</th></tr></thead><tbody>
+      ${metricDelta('Daño hecho', tA.dmgDone, tB.dmgDone, true, false)}
+      ${metricDelta('Daño recibido', tA.dmgReceived, tB.dmgReceived, false, false)}
+      ${metricDelta('Curación hecha', tA.healDone, tB.healDone, true, false)}
+      ${metricDelta('Curación recibida', tA.healReceived, tB.healReceived, true, false)}
+      ${metricDelta('Derribos totales', tA.kos, tB.kos, false, false)}
+      </tbody></table>`;
+  }
+
   let html = `<div class="meta" style="font-weight:600; color:var(--text);">Comparativa: ${escapeHtml(eA.name)} (${fmtDate(eA.date)}) → ${escapeHtml(eB.name)} (${fmtDate(eB.date)})</div>
-    ${tagLine(eA.tags)}${tagLine(eB.tags)}
-    <table><thead><tr><th>Total del grupo</th><th>${escapeHtml(eA.name)}</th><th>${escapeHtml(eB.name)}</th><th>Cambio</th></tr></thead><tbody>
-    ${metricDelta('Daño hecho', totA.dmgDone, totB.dmgDone, true, false)}
-    ${metricDelta('Daño recibido', totA.dmgReceived, totB.dmgReceived, false, false)}
-    ${metricDelta('Curación hecha', totA.healDone, totB.healDone, true, false)}
-    ${metricDelta('Curación recibida', totA.healReceived, totB.healReceived, true, false)}
-    ${metricDelta('Derribos totales', totA.kos, totB.kos, false, false)}
-    </tbody></table>`;
+    ${tagLine(eA.tags)}${tagLine(eB.tags)}`;
+
+  const totalUnclassified = splitA.sinClasificar.length + splitB.sinClasificar.length;
+  if (totalUnclassified){
+    html += `<div class="meta" style="margin-top:8px; color:var(--accent2);">⚠ ${totalUnclassified} jugador(es) sin clasificar como aliado/enemigo — no entran en los totales de abajo. <span id="openRoleModalFromCompare" style="cursor:pointer; text-decoration:underline;">Clasificar ahora</span></div>`;
+  }
+
+  html += groupTable('Aliados', splitA.aliados, splitB.aliados);
+  html += groupTable('Enemigos', splitA.enemigos, splitB.enemigos);
+  if (!splitA.aliados.length && !splitB.aliados.length && !splitA.enemigos.length && !splitB.enemigos.length){
+    html += `<div class="meta" style="margin-top:14px;">Ningún jugador de estos dos combates está clasificado todavía como aliado o enemigo.</div>`;
+  }
 
   const namesA = Object.keys(eA.players);
   const namesB = Object.keys(eB.players);
@@ -846,13 +865,26 @@ async function renderComparison(idA, idB){
   const onlyA = namesA.filter(n => !namesB.includes(n));
   const onlyB = namesB.filter(n => !namesA.includes(n));
 
+  function roleBadge(n){
+    const roleA = eA.roles && eA.roles[n];
+    const roleB = eB.roles && eB.roles[n];
+    if (roleA && roleB && roleA !== roleB){
+      return ` <span style="font-size:11px; font-weight:400; color:var(--accent2);">(bando distinto entre combates)</span>`;
+    }
+    const role = roleA || roleB;
+    if (!role) return '';
+    const color = role === 'aliado' ? 'var(--heal)' : 'var(--dmg)';
+    const label = role === 'aliado' ? 'Aliado' : 'Enemigo';
+    return ` <span style="font-size:11px; font-weight:400; color:${color};">(${label})</span>`;
+  }
+
   if (common.length){
     html += `<div class="meta" style="margin-top:16px;">Por jugador (solo se comparan los presentes en ambos combates)</div>`;
     for (const n of common){
       const pA = eA.players[n], pB = eB.players[n];
       const critA = pA.effectSpells ? (pA.effectCrits/pA.effectSpells*100) : 0;
       const critB = pB.effectSpells ? (pB.effectCrits/pB.effectSpells*100) : 0;
-      html += `<div class="meta" style="margin-top:10px; font-weight:600;">${escapeHtml(n)}</div>
+      html += `<div class="meta" style="margin-top:10px; font-weight:600;">${escapeHtml(n)}${roleBadge(n)}</div>
         <table><thead><tr><th></th><th>${escapeHtml(eA.name)}</th><th>${escapeHtml(eB.name)}</th><th>Cambio</th></tr></thead><tbody>
         ${metricDelta('Daño hecho', pA.dmgDone, pB.dmgDone, true, false)}
         ${metricDelta('Daño recibido', pA.dmgReceived, pB.dmgReceived, false, false)}
@@ -867,6 +899,10 @@ async function renderComparison(idA, idB){
   }
 
   wrap.innerHTML = html;
+  const link = document.getElementById('openRoleModalFromCompare');
+  if (link) link.addEventListener('click', () => {
+    openRoleModal([idA, idB], () => { renderHistoryList(); });
+  });
 }
 
 const drop = document.getElementById('drop');
