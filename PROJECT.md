@@ -86,6 +86,11 @@ de daño, derribos totales) y un checkbox por combate.
   ej. subir daño hecho es bueno, subir daño recibido es malo). Los jugadores que solo aparecen en
   uno de los dos combates se listan aparte, sin comparar.
 
+**Etiquetas opcionales**: al guardar un combate se pueden rellenar tres campos opcionales —
+Jefe, Mazmorra, Dificultad (texto libre, sin lista cerrada). Se muestran bajo el nombre del
+combate en el historial y en la cabecera de la comparativa. Los combates guardados antes de
+esta feature simplemente no tienen etiquetas y se muestran igual, sin romperse.
+
 ## Modo debug que aprende (alcance deliberadamente limitado)
 
 Antes, cada bug marcado en el modo debug se exportaba a JSON y había que pasárselo a Claude para
@@ -171,7 +176,7 @@ wakfu-calc/
 - [ ] Vista de tendencia (gráfico) cuando haya 3+ combates guardados — pendiente
 - [ ] IA que analice el historial y dé consejos concretos a partir de los deltas — pendiente
 - [ ] Desglose por turno — pendiente
-- [ ] Etiquetar combates (jefe/mazmorra/dificultad) al guardarlos — pendiente
+- [x] Etiquetar combates (jefe/mazmorra/dificultad) al guardarlos, mostradas en historial y comparativa
 - [ ] Ratios de eficiencia (daño por turno, daño hecho vs. recibido) — pendiente
 
 ## Trabajo multi-sesión / multi-cuenta

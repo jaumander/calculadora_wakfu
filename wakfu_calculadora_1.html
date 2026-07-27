@@ -233,6 +233,18 @@ async function renderResolutionsList(){
   });
 }
 
+// Etiquetas opcionales guardadas con un combate (jefe/mazmorra/dificultad). Los combates
+// guardados antes de esta feature no tienen `tags` — se tratan como si no tuvieran ninguna.
+function tagLine(tags){
+  if (!tags) return '';
+  const parts = [];
+  if (tags.boss) parts.push(`Jefe: ${escapeHtml(tags.boss)}`);
+  if (tags.dungeon) parts.push(`Mazmorra: ${escapeHtml(tags.dungeon)}`);
+  if (tags.difficulty) parts.push(`Dificultad: ${escapeHtml(tags.difficulty)}`);
+  if (!parts.length) return '';
+  return `<div style="font-size:11px; color:var(--accent); margin-top:2px;">${parts.join(' · ')}</div>`;
+}
+
 function combatTotals(players){
   let dmgDone=0, dmgReceived=0, healDone=0, healReceived=0, kos=0;
   let mvp = null, mvpDmg = -1;
@@ -265,6 +277,7 @@ async function renderHistoryList(){
       <div style="flex:1;">
         <div style="font-size:13px;">${escapeHtml(entry.name)}</div>
         <div style="font-size:11px; color:var(--muted);">${fmtDate(entry.date)} — MVP daño: ${escapeHtml(t.mvp || '—')} (${t.mvpDmg.toLocaleString('es-ES')}) · Derribos totales: ${t.kos}</div>
+        ${tagLine(entry.tags)}
       </div>
       <button class="ghost" style="padding:4px 8px;" data-del="${entry.id}">Borrar</button>
     </div>`;
@@ -323,6 +336,7 @@ async function renderComparison(idA, idB){
   const totA = combatTotals(eA.players);
   const totB = combatTotals(eB.players);
   let html = `<div class="meta" style="font-weight:600; color:var(--text);">Comparativa: ${escapeHtml(eA.name)} (${fmtDate(eA.date)}) → ${escapeHtml(eB.name)} (${fmtDate(eB.date)})</div>
+    ${tagLine(eA.tags)}${tagLine(eB.tags)}
     <table><thead><tr><th>Total del grupo</th><th>${escapeHtml(eA.name)}</th><th>${escapeHtml(eB.name)}</th><th>Cambio</th></tr></thead><tbody>
     ${metricDelta('Daño hecho', totA.dmgDone, totB.dmgDone, true, false)}
     ${metricDelta('Daño recibido', totA.dmgReceived, totB.dmgReceived, false, false)}
@@ -856,6 +870,11 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
     <div class="card" style="margin-top:20px;">
       <label>Guardar este combate en el historial</label>
       <input type="text" id="saveName" placeholder="ej. Ereshkigal intento 3">
+      <div class="row" style="margin-top:10px;">
+        <div><input type="text" id="saveTagBoss" placeholder="Jefe (opcional)"></div>
+        <div><input type="text" id="saveTagDungeon" placeholder="Mazmorra (opcional)"></div>
+        <div><input type="text" id="saveTagDifficulty" placeholder="Dificultad (opcional)"></div>
+      </div>
       <button class="primary" id="btnSaveHistory" style="margin-top:4px;">Guardar en historial</button>
       <div id="saveStatus" style="font-size:12px; color:var(--muted); margin-top:8px;"></div>
     </div>
@@ -1015,12 +1034,18 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
     const nameInput = document.getElementById('saveName');
     const status = document.getElementById('saveStatus');
     const name = nameInput.value.trim() || `Combate ${new Date().toLocaleString('es-ES')}`;
+    const tags = {
+      boss: document.getElementById('saveTagBoss').value.trim(),
+      dungeon: document.getElementById('saveTagDungeon').value.trim(),
+      difficulty: document.getElementById('saveTagDifficulty').value.trim()
+    };
     const entry = {
       id: Date.now() + '-' + Math.random().toString(36).slice(2, 7),
       name,
       date: new Date().toISOString(),
       startLine: currentResult.startLine,
       endLine: currentResult.endLine,
+      tags,
       players: currentResult.players
     };
     const list = await loadHistory();
