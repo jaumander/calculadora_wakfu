@@ -4,7 +4,44 @@
 > parte de PROJECT.md con normalidad. Si NO está vacío, hay trabajo a medias — lee esto
 > ANTES de tocar código, para no reimplementar o pisar algo ya empezado.
 
-## Estado: Nada en curso
+## Estado: En curso
+
+**Feature/tarea:** Hacer standalone las dos features pendientes (ver PROJECT.md, sección
+"Principio de diseño: debe funcionar también fuera del panel de chat") — decisión ya tomada:
+guardar la clave de la API en `localStorage` (opción cómoda, no la conservadora).
+
+**Objetivo:**
+1. Análisis con IA: fuera del panel, pedir una clave de Anthropic, guardarla en `localStorage`,
+   y usarla en el `fetch` con las cabeceras BYOK (`x-api-key`, `anthropic-version`,
+   `anthropic-dangerous-direct-browser-access`).
+2. Correcciones aprendidas: fuera del panel, usar `localStorage` en vez de perderse en memoria.
+
+**Alcance (qué toca / qué NO toca):**
+- Toca: `runAIAnalysis` (cabeceras condicionales), nueva tarjeta de IA dividida en un contenedor
+  `#aiCardBody` que se puede re-renderizar solo (sin re-pintar toda `renderResults`) al
+  guardar/olvidar la clave; `loadResolutions`/`saveResolution`/`deleteResolution` con fallback a
+  `localStorage`; nota junto a la tarjeta de correcciones igual que la del historial.
+- NO toca: `parseCombat`, `resolveSource`, comparativa, tendencia, formato de guardado del
+  historial, ni el comportamiento dentro del panel de chat (debe seguir funcionando exactamente
+  igual que antes cuando `hasStorage()` es true).
+
+**Hecho hasta ahora:** nada commiteado todavía.
+
+**Falta por hacer:**
+- 1/2: `hasLocalStorage()`, `getStoredApiKey`/`saveApiKey`/`clearApiKey`, `buildAIHeaders(apiKey)`
+  (pura, testable con Node), `renderAICard()` como sub-render independiente, wiring del
+  formulario de clave, `runAIAnalysis` actualizado para usar cabeceras BYOK cuando corresponda.
+- 2/2: fallback a `localStorage` en las 3 funciones de correcciones aprendidas + nota en su
+  tarjeta + actualizar PROJECT.md (marcar ambas como resueltas, ya no "pendiente de decisión").
+
+**Dónde tocar:** `wakfu_calculadora_1.html` — buscar `btnAnalyzeAI`/`runAIAnalysis` y
+`loadResolutions`/`saveResolution`/`deleteResolution`.
+
+**Último commit relevante:** (ver `git log`, el de "Docs: principio de diseño standalone...")
+
+**Cualquier cosa rota/a medio probar ahora mismo:** nada roto.
+
+**Log de prueba usado:** ninguno necesario, no se toca el parser.
 
 ---
 
