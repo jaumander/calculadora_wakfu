@@ -201,6 +201,13 @@ function fmtDate(iso){
   return d.toLocaleDateString('es-ES') + ' ' + d.toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'});
 }
 
+// Stub defensivo: el contenedor #resolutionsList se añade en el siguiente milestone. Hasta
+// entonces, esta función no hace nada si no lo encuentra (no rompe el flujo de "Confirmar").
+function renderResolutionsList(){
+  const wrap = document.getElementById('resolutionsList');
+  if (!wrap) return;
+}
+
 function combatTotals(players){
   let dmgDone=0, dmgReceived=0, healDone=0, healReceived=0, kos=0;
   let mvp = null, mvpDmg = -1;
@@ -780,6 +787,9 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
     </div>
     <div class="meta" style="margin-top:14px; cursor:pointer;" id="toggleDebug">▸ Modo debug (cada mensaje del chat, a quién se atribuyó y por qué)</div>
     <div id="debugWrap" style="display:none; margin-top:10px;">
+      <div class="meta" style="margin-bottom:10px;">La columna "Aprender" solo aparece cuando el evento viene de un estado/aura con nombre
+        reconocido entre paréntesis. Confirmar ahí guarda quién debería llevarse siempre el mérito de ese
+        nombre de estado — no cambia nada más de la app.</div>
       <div class="filters">
         <select id="debugFilterCat"><option value="">Todas las categorías</option></select>
         <input type="text" id="debugSearch" placeholder="Buscar jugador o texto…">
@@ -787,7 +797,7 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
       </div>
       <table id="debugTable">
         <thead><tr>
-          <th>Línea del log</th><th>Categoría</th><th>Objetivo</th><th>Atribuido a</th><th>Razón</th><th>🐞 Bug</th>
+          <th>Línea del log</th><th>Categoría</th><th>Objetivo</th><th>Atribuido a</th><th>Razón</th><th>Aprender</th><th>🐞 Bug</th>
         </tr></thead>
         <tbody>${debugEvents.map((ev, i) => `
           <tr data-cat="${escapeHtml(ev.category)}" data-idx="${i}">
@@ -796,6 +806,13 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
             <td style="text-align:left;">${escapeHtml(ev.target)}</td>
             <td style="text-align:left; color:${ev.source && ev.source !== '(sin atribuir)' ? 'var(--accent)' : 'var(--muted)'};">${escapeHtml(ev.source)}</td>
             <td style="text-align:left; font-size:12px; color:var(--muted); max-width:280px;">${escapeHtml(ev.reason)}</td>
+            <td style="text-align:left;">${ev.effName ? `
+              <select class="learnSelect" data-idx="${i}" data-eff="${escapeHtml(ev.effName)}" style="background:var(--panel2); border:1px solid var(--line); color:var(--text); border-radius:4px; font-size:11px; padding:3px;">
+                <option value="">elegir…</option>
+                ${names.map(n => `<option value="${escapeHtml(n)}"${ev.source===n?' selected':''}>${escapeHtml(n)}</option>`).join('')}
+              </select>
+              <button class="toggleBtn learnBtn" data-idx="${i}" data-eff="${escapeHtml(ev.effName)}" style="margin-left:4px;">Confirmar</button>
+            ` : ''}</td>
             <td>
               <input type="checkbox" class="bugCheck" data-idx="${i}">
               <textarea class="bugNote" data-idx="${i}" placeholder="¿Por qué crees que es un bug?"
@@ -888,6 +905,21 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
   });
 
   makeSortable(document.getElementById('debugTable'));
+
+  document.querySelectorAll('.learnBtn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const idx = btn.dataset.idx;
+      const eff = btn.dataset.eff;
+      const select = document.querySelector(`.learnSelect[data-idx="${idx}"]`);
+      const val = select.value;
+      if (!val){ select.style.borderColor = 'var(--dmg)'; return; }
+      await saveResolution(eff, val);
+      btn.textContent = '✓ Aprendido';
+      btn.disabled = true;
+      select.disabled = true;
+      renderResolutionsList();
+    });
+  });
 
   const debugCatSelect = document.getElementById('debugFilterCat');
   const debugUniqueCats = [...new Set(debugEvents.map(ev => ev.category))].sort();
