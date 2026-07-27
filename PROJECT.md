@@ -86,6 +86,33 @@ de daño, derribos totales) y un checkbox por combate.
   ej. subir daño hecho es bueno, subir daño recibido es malo). Los jugadores que solo aparecen en
   uno de los dos combates se listan aparte, sin comparar.
 
+## Modo debug que aprende (alcance deliberadamente limitado)
+
+Antes, cada bug marcado en el modo debug se exportaba a JSON y había que pasárselo a Claude para
+que ajustara el código a mano. Ahora, para un tipo concreto de error — la atribución de un
+evento a un jugador equivocado (o a nadie, por ambigüedad) — el usuario puede confirmarlo él
+mismo desde la propia tabla del modo debug, y esa corrección se aplica sola en los próximos
+combates.
+
+**Por qué el alcance está limitado a esto y no a "cualquier bug":** dejar que el usuario corrija
+libremente cualquier aspecto (regex de parseo, categorías, cantidades…) desde la interfaz abriría
+la puerta a que una corrección mal hecha rompa el parser para todo el mundo. En vez de eso:
+
+- Lo único que se guarda es un mapa `{ nombreEstado: nombreJugador }` (clave `stateResolutions`
+  en el mismo almacenamiento persistente que el historial).
+- Solo se puede confirmar en filas del modo debug donde el evento venga de un nombre de
+  estado/aura ya reconocido entre paréntesis (columna "Aprender": un `<select>` con los jugadores
+  del combate actual + botón "Confirmar" — nunca texto libre).
+- `resolveSource` consulta ese mapa antes que la heurística de "dueño del estado"; si hay una
+  corrección guardada para ese nombre, gana siempre, sin volver a preguntar.
+- No puede alterar cantidades de daño/curación, categorías, ni ningún regex de parseo — como
+  mucho, en el peor caso, sigue atribuyendo mal un evento concreto, igual que antes.
+- Cualquier otro tipo de bug (parseo incorrecto, categoría mal detectada, etc.) sigue el flujo
+  manual de siempre: marcar 🐞, anotar por qué, exportar y pasárselo a Claude.
+
+Hay una tarjeta siempre visible ("Correcciones de atribución aprendidas") que lista todo lo
+aprendido hasta ahora y permite "Olvidar" cualquier corrección si resultó ser un error.
+
 ## Modo debug
 
 Sección plegable que expone, evento por evento: la línea exacta del log, la categoría, el
@@ -136,6 +163,9 @@ wakfu-calc/
       chat, export/import `wakfu_historial.json` para uso como archivo suelto)
 - [x] Comparativa entre 2 combates guardados: totales del grupo y desglose por jugador con
       delta y color según si la métrica mejora o empeora
+- [x] Modo debug que aprende: correcciones de atribución (`{estado: jugador}`) confirmables desde
+      la propia tabla de debug, guardadas en `window.storage`, aplicadas solas en próximos
+      combates — alcance limitado a atribución, ver sección dedicada más arriba
 - [ ] Selector de idioma de la interfaz (ES/EN) — pendiente si se necesita
 - [ ] Revisar eventos marcados como bug en el modo debug cuando el usuario los exporte
 - [ ] Vista de tendencia (gráfico) cuando haya 3+ combates guardados — pendiente

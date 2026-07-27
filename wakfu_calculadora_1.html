@@ -127,6 +127,14 @@
   <div id="compareWrap" style="margin-top:16px; display:none;"></div>
 </div>
 
+<div class="card" id="resolutionsCard">
+  <label>Correcciones de atribución aprendidas</label>
+  <div class="meta" style="margin-top:-6px; margin-bottom:10px;">Solo deciden a quién se atribuye
+    un nombre de estado/aura ya reconocido por el parser cuando antes era ambiguo. No cambian
+    ninguna otra parte de la app.</div>
+  <div id="resolutionsList"><span style="color:var(--muted); font-size:13px;">Cargando…</span></div>
+</div>
+
 <div id="results"></div>
 
 <script>
@@ -201,11 +209,28 @@ function fmtDate(iso){
   return d.toLocaleDateString('es-ES') + ' ' + d.toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'});
 }
 
-// Stub defensivo: el contenedor #resolutionsList se añade en el siguiente milestone. Hasta
-// entonces, esta función no hace nada si no lo encuentra (no rompe el flujo de "Confirmar").
-function renderResolutionsList(){
+// Lista, en la tarjeta siempre visible, las correcciones de atribución aprendidas hasta ahora
+// (mapa estado -> jugador) y permite borrar cada una individualmente.
+async function renderResolutionsList(){
   const wrap = document.getElementById('resolutionsList');
-  if (!wrap) return;
+  if (!wrap) return; // el contenedor todavía no está en el DOM en esta parte del flujo
+  const map = await loadResolutions();
+  const entries = Object.entries(map);
+  if (!entries.length){
+    wrap.innerHTML = '<span style="color:var(--muted); font-size:13px;">Aún no hay correcciones aprendidas. Aparecerán aquí cuando confirmes alguna desde el modo debug.</span>';
+    return;
+  }
+  wrap.innerHTML = entries.map(([eff, player]) => `
+    <div style="display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--line);">
+      <div style="flex:1; font-size:13px;">Estado <strong>"${escapeHtml(eff)}"</strong> → siempre atribuido a <span style="color:var(--accent);">${escapeHtml(player)}</span></div>
+      <button class="ghost" style="padding:4px 8px;" data-forget="${escapeHtml(eff)}">Olvidar</button>
+    </div>`).join('');
+  wrap.querySelectorAll('[data-forget]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await deleteResolution(btn.dataset.forget);
+      renderResolutionsList();
+    });
+  });
 }
 
 function combatTotals(players){
@@ -1050,6 +1075,7 @@ function makeSortable(table){
 
 // --- Inicialización del historial (independiente de que haya un cálculo cargado) ---
 renderHistoryList();
+renderResolutionsList();
 
 document.getElementById('btnExportHistory').addEventListener('click', async () => {
   const list = await loadHistory();
