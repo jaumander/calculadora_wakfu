@@ -144,6 +144,15 @@ wakfu-calc/
 - [ ] Etiquetar combates (jefe/mazmorra/dificultad) al guardarlos — pendiente
 - [ ] Ratios de eficiencia (daño por turno, daño hecho vs. recibido) — pendiente
 
+## Trabajo multi-sesión / multi-cuenta
+
+Este proyecto se trabaja desde varias sesiones de Claude (distintas cuentas) en paralelo,
+así que **antes de tocar código, mira `HANDOFF.md`** en la raíz del repo — dice si hay
+trabajo a medias de una sesión anterior que se quedó sin tokens, y evita reimplementar o
+pisar algo ya empezado. Al dejar algo a medias (por ejemplo por falta de tokens), se rellena
+esa plantilla y se hace commit/push antes de cerrar, en vez de esperar a tener la feature
+100% terminada. Detalle completo del protocolo dentro del propio `HANDOFF.md`.
+
 ## Créditos
 
 Idea original: [MethodWakfu Companion](https://companion.methodwakfu.com/) (jpark / Zephyrs
