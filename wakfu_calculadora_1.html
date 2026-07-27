@@ -327,6 +327,28 @@ function combatTotals(players){
   return { dmgDone, dmgReceived, healDone, healReceived, kos, mvp, mvpDmg };
 }
 
+// Devuelve un sub-objeto de `players` con solo los nombres indicados (los que no existan se
+// ignoran). Pura, sin DOM — sirve para pasarle a combatTotals solo los aliados, solo los
+// enemigos, o solo los sin clasificar, sin tener que tocar la firma de combatTotals.
+function subsetPlayers(players, names){
+  const out = {};
+  for (const n of names){ if (players[n]) out[n] = players[n]; }
+  return out;
+}
+
+// Clasifica los nombres de un combate del historial según entry.roles (objeto { nombre:
+// 'aliado'|'enemigo' } opcional, ausente en combates guardados antes de esta feature).
+// Devuelve las 3 listas de nombres; nunca adivina: sin entrada en roles = sin clasificar.
+function splitByRole(entry){
+  const names = Object.keys(entry.players);
+  const roles = entry.roles || {};
+  return {
+    aliados: names.filter(n => roles[n] === 'aliado'),
+    enemigos: names.filter(n => roles[n] === 'enemigo'),
+    sinClasificar: names.filter(n => !roles[n])
+  };
+}
+
 // --- Análisis con IA: media histórica por jugador, deltas %, y payload compacto para el prompt ---
 
 function computePlayerHistoryAvg(history, playerName){
@@ -516,6 +538,75 @@ function renderAICard(){
   });
 }
 
+// Modal de clasificación aliado/enemigo. entryIds: 1 combate (desde el historial) o 2 (desde
+// la comparativa). Muestra la unión de nombres de esos combates; si un nombre ya tiene rol en
+// alguno de ellos, se preselecciona. Al guardar, aplica el rol elegido a ese nombre en TODOS los
+// combates pasados que lo contengan (un personaje se asume del mismo bando en los combates que
+// se están clasificando juntos). No toca combates fuera de entryIds.
+async function openRoleModal(entryIds, onSaved){
+  const list = await loadHistory();
+  const entries = entryIds.map(id => list.find(e => e.id === id)).filter(Boolean);
+  if (!entries.length) return;
+
+  const names = [...new Set(entries.flatMap(e => Object.keys(e.players)))].sort();
+  const selections = {};
+  names.forEach(n => {
+    for (const e of entries){
+      if (e.roles && e.roles[n]){ selections[n] = e.roles[n]; break; }
+    }
+  });
+
+  document.getElementById('roleModalOverlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'roleModalOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;';
+  overlay.innerHTML = `
+    <div style="background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;max-width:440px;width:100%;max-height:80vh;overflow:auto;">
+      <div style="font-weight:600; color:var(--text); margin-bottom:4px;">Clasificar aliados / enemigos</div>
+      <div class="meta" style="margin-bottom:14px;">Los nombres sin marcar quedan "sin clasificar" y no entran en los totales de Aliados ni Enemigos de la comparativa.</div>
+      <div id="roleModalList">${names.map(n => `
+        <div style="display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--line);" data-name="${escapeHtml(n)}">
+          <div style="flex:1; font-size:13px; color:var(--text);">${escapeHtml(n)}</div>
+          <button type="button" class="toggleBtn roleBtn${selections[n]==='aliado' ? ' on' : ''}" data-role="aliado">Aliado</button>
+          <button type="button" class="toggleBtn roleBtn${selections[n]==='enemigo' ? ' on' : ''}" data-role="enemigo">Enemigo</button>
+        </div>`).join('')}
+      </div>
+      <div style="display:flex; gap:8px; margin-top:16px;">
+        <button class="primary" id="roleModalSave">Guardar clasificación</button>
+        <button class="ghost" id="roleModalCancel">Cancelar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  overlay.querySelectorAll('.roleBtn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const row = btn.closest('[data-name]');
+      const name = row.dataset.name;
+      const role = btn.dataset.role;
+      selections[name] = selections[name] === role ? null : role; // clic de nuevo = quitar marca
+      row.querySelectorAll('.roleBtn').forEach(b => b.classList.toggle('on', selections[name] === b.dataset.role));
+    });
+  });
+
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  overlay.querySelector('#roleModalCancel').addEventListener('click', () => overlay.remove());
+  overlay.querySelector('#roleModalSave').addEventListener('click', async () => {
+    const freshList = await loadHistory();
+    for (const e of entries){
+      const target = freshList.find(x => x.id === e.id);
+      if (!target) continue;
+      if (!target.roles) target.roles = {};
+      for (const n of Object.keys(target.players)){
+        if (selections[n]) target.roles[n] = selections[n];
+        else delete target.roles[n];
+      }
+    }
+    await saveHistoryList(freshList);
+    overlay.remove();
+    if (onSaved) onSaved();
+  });
+}
+
 async function renderHistoryList(){
   const list = await loadHistory();
   const wrap = document.getElementById('historyList');
@@ -539,6 +630,7 @@ async function renderHistoryList(){
         <div style="font-size:11px; color:var(--muted);">${fmtDate(entry.date)} — MVP daño: ${escapeHtml(t.mvp || '—')} (${t.mvpDmg.toLocaleString('es-ES')}) · Derribos totales: ${t.kos}</div>
         ${tagLine(entry.tags)}
       </div>
+      <button class="ghost" style="padding:4px 8px;" data-classify="${entry.id}">Clasificar</button>
       <button class="ghost" style="padding:4px 8px;" data-del="${entry.id}">Borrar</button>
     </div>`;
   }).join('');
@@ -548,6 +640,11 @@ async function renderHistoryList(){
       const checked = wrap.querySelectorAll('.historyCheck:checked');
       if (checked.length > 2){ cb.checked = false; return; }
       updateCompareUI();
+    });
+  });
+  wrap.querySelectorAll('[data-classify]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      openRoleModal([btn.dataset.classify], () => { renderHistoryList(); updateCompareUI(); });
     });
   });
   wrap.querySelectorAll('[data-del]').forEach(btn => {
