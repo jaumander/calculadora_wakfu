@@ -294,6 +294,37 @@ wakfu-calc/
 - [x] Clasificación aliado/enemigo por combate (modal + `entry.roles`), Total del grupo dividido
       en Aliados/Enemigos en la comparativa, en vez de amalgamar ambos bandos
 
+## Mejoras de calidad de vida (QoL) — carga de log, tablas, desplegables
+
+**Alcance — qué toca:**
+- Zona de carga de archivo: recordar las palabras clave de inicio/fin entre sesiones, y avisar
+  de forma específica si el archivo cargado no tiene pinta de log de Wakfu (en vez del mensaje
+  genérico de "no se encontraron las palabras clave").
+- Tablas de resultados (principal, avanzada, hechizos, mods): botón de copiar en las celdas que
+  ya muestran línea(s) de log en el tooltip; buscador de jugador que filtra filas/bloques en esas
+  mismas tablas; botón "Copiar tabla como texto" en la tabla principal.
+- Desplegables del panel de resultados (avanzado/mods/hechizos/debug): recordar cuáles estaban
+  abiertos al recalcular otro combate, solo durante la sesión actual de la pestaña (variable en
+  memoria, no persistente entre recargas — así el riesgo de esta parte queda igual de bajo que
+  antes).
+
+**Qué NO toca (explícito para no poder romperlo por accidente):**
+- `parseCombat`, `resolveSource` ni ningún regex de parseo de eventos ya existente. Ninguna de
+  estas mejoras cambia cómo se interpretan las líneas del log, solo cómo se usan/muestran los
+  datos ya calculados.
+- Historial, comparativa, vista de tendencia, Análisis con IA, clasificación aliado/enemigo,
+  modo debug que aprende (`stateResolutions`) — nada de esa lógica se modifica.
+
+**Milestones:**
+1. Recordar palabras clave de inicio/fin (storage igual que `stateResolutions`: `window.storage`
+   dentro del panel, `localStorage` fuera).
+2. Botón copiar en celdas con tooltip de línea(s) de log (derribos, resurrecciones,
+   buffs/debuffs, hechizos).
+3. Buscador rápido de jugador (filtra tabla principal, avanzada, mods y bloques de hechizos).
+4. Recordar qué desplegables estaban abiertos entre cálculos, solo en memoria de la sesión.
+5. Aviso específico cuando el archivo cargado no tiene formato de log de Wakfu reconocible.
+6. Botón "Copiar tabla como texto" en la tabla principal.
+
 ## Trabajo multi-sesión / multi-cuenta
 
 Este proyecto se trabaja desde varias sesiones de Claude (distintas cuentas) en paralelo,
