@@ -996,10 +996,28 @@ function svgTrendChart(points, metric){
   </svg>`;
 }
 
-function drawTrendChart(list, playerName, metric){
+// Combinaciones distintas de etiquetas (jefe/mazmorra/dificultad) presentes en el historial,
+// para poblar el selector de la vista de tendencia. Ignora combates sin ninguna etiqueta.
+function uniqueTagCombos(list){
+  const seen = new Map();
+  for (const e of list){
+    const t = e.tags;
+    if (!t || (!t.boss && !t.dungeon && !t.difficulty)) continue;
+    const combo = { boss: t.boss || '', dungeon: t.dungeon || '', difficulty: t.difficulty || '' };
+    const key = JSON.stringify(combo);
+    if (!seen.has(key)) seen.set(key, combo);
+  }
+  return [...seen.values()];
+}
+function tagComboLabel(combo){
+  return [combo.boss, combo.dungeon, combo.difficulty].filter(Boolean).join(' · ') || '(sin etiquetas)';
+}
+
+function drawTrendChart(list, playerName, metric, tagFilter){
   const holder = document.getElementById('trendChartHolder');
   if (!holder) return;
-  const sorted = [...list].sort((a,b) => new Date(a.date) - new Date(b.date));
+  const filteredList = filterHistoryByTags(list, tagFilter);
+  const sorted = [...filteredList].sort((a,b) => new Date(a.date) - new Date(b.date));
   const points = [];
   for (const e of sorted){
     const v = trendValue(e, playerName, metric);
@@ -1007,7 +1025,9 @@ function drawTrendChart(list, playerName, metric){
   }
   if (points.length < 2){
     const who = playerName === '__total__' ? 'el total del grupo' : escapeHtml(playerName);
-    holder.innerHTML = `<div class="meta">No hay suficientes combates con datos de ${who} para esta métrica todavía.</div>`;
+    const tagNote = (tagFilter && (tagFilter.boss || tagFilter.dungeon || tagFilter.difficulty))
+      ? ' con esas etiquetas' : '';
+    holder.innerHTML = `<div class="meta">No hay suficientes combates${tagNote} con datos de ${who} para esta métrica todavía.</div>`;
     return;
   }
   holder.innerHTML = svgTrendChart(points, metric);
@@ -1021,8 +1041,10 @@ function renderTrendUI(list){
     return;
   }
   const allPlayers = [...new Set(list.flatMap(e => Object.keys(e.players)))].sort((a,b) => a.localeCompare(b,'es'));
+  const tagCombos = uniqueTagCombos(list);
   const prevPlayer = document.getElementById('trendPlayerSelect')?.value;
   const prevMetric = document.getElementById('trendMetricSelect')?.value;
+  const prevTag = document.getElementById('trendTagSelect')?.value;
 
   wrap.innerHTML = `
     <div class="filters">
@@ -1033,17 +1055,31 @@ function renderTrendUI(list){
       <select id="trendMetricSelect">
         ${Object.entries(TREND_METRICS).map(([k,d]) => `<option value="${k}">${escapeHtml(d.label)}</option>`).join('')}
       </select>
+      ${tagCombos.length ? `
+      <select id="trendTagSelect">
+        <option value="">Todos los combates</option>
+        ${tagCombos.map(c => `<option value='${escapeHtml(JSON.stringify(c))}'>${escapeHtml(tagComboLabel(c))}</option>`).join('')}
+      </select>` : ''}
     </div>
     <div id="trendChartHolder" style="margin-top:12px;"></div>
   `;
   const playerSel = document.getElementById('trendPlayerSelect');
   const metricSel = document.getElementById('trendMetricSelect');
+  const tagSel = document.getElementById('trendTagSelect');
   if (prevPlayer && (prevPlayer === '__total__' || allPlayers.includes(prevPlayer))) playerSel.value = prevPlayer;
   if (prevMetric && TREND_METRICS[prevMetric]) metricSel.value = prevMetric;
+  if (tagSel && prevTag){
+    const stillExists = [...tagSel.options].some(o => o.value === prevTag);
+    if (stillExists) tagSel.value = prevTag;
+  }
 
-  const draw = () => drawTrendChart(list, playerSel.value, metricSel.value);
+  const draw = () => {
+    const tagFilter = tagSel && tagSel.value ? JSON.parse(tagSel.value) : null;
+    drawTrendChart(list, playerSel.value, metricSel.value, tagFilter);
+  };
   playerSel.addEventListener('change', draw);
   metricSel.addEventListener('change', draw);
+  if (tagSel) tagSel.addEventListener('change', draw);
   draw();
 }
 
