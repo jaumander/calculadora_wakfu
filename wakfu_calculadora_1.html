@@ -303,6 +303,40 @@ function buildAIHeaders(apiKey){
   return headers;
 }
 
+// --- Recordar las palabras clave de inicio/fin entre sesiones ---
+// Mismo patrón que stateResolutions: window.storage dentro del panel, localStorage fuera.
+let keywordsCache = null;
+const KEYWORDS_LOCAL_KEY = 'wakfu_calc_keywords';
+
+async function loadKeywords(){
+  if (keywordsCache) return keywordsCache;
+  if (hasStorage()){
+    try{
+      const res = await window.storage.get('keywords', false);
+      keywordsCache = res && res.value ? JSON.parse(res.value) : null;
+    } catch(e){ keywordsCache = null; }
+    return keywordsCache;
+  }
+  if (hasLocalStorage()){
+    try{
+      const raw = window.localStorage.getItem(KEYWORDS_LOCAL_KEY);
+      keywordsCache = raw ? JSON.parse(raw) : null;
+    } catch(e){ keywordsCache = null; }
+  }
+  return keywordsCache;
+}
+
+async function saveKeywords(startKw, endKw){
+  keywordsCache = { startKw, endKw };
+  if (hasStorage()){
+    try{ await window.storage.set('keywords', JSON.stringify(keywordsCache), false); }
+    catch(e){ console.error('No se pudieron guardar las palabras clave', e); }
+  } else if (hasLocalStorage()){
+    try{ window.localStorage.setItem(KEYWORDS_LOCAL_KEY, JSON.stringify(keywordsCache)); }
+    catch(e){ console.error('No se pudieron guardar las palabras clave en este navegador', e); }
+  }
+}
+
 async function loadHistory(){
   if (historyCache) return historyCache;
   if (!hasStorage()){ historyCache = []; return historyCache; }
@@ -1060,9 +1094,12 @@ btnReset.addEventListener('click', () => {
 });
 
 btnSubmit.addEventListener('click', async () => {
-  const startKw = document.getElementById('startKw').value.trim().toLowerCase();
-  const endKw = document.getElementById('endKw').value.trim().toLowerCase();
+  const startKwRaw = document.getElementById('startKw').value.trim();
+  const endKwRaw = document.getElementById('endKw').value.trim();
+  const startKw = startKwRaw.toLowerCase();
+  const endKw = endKwRaw.toLowerCase();
   if (!rawText) return;
+  saveKeywords(startKwRaw, endKwRaw);
   const lines = rawText.split(/\r?\n/);
 
   const startIdxAll = [];
@@ -1770,6 +1807,12 @@ function makeSortable(table){
 // --- Inicialización del historial (independiente de que haya un cálculo cargado) ---
 renderHistoryList();
 renderResolutionsList();
+
+loadKeywords().then(saved => {
+  if (!saved) return;
+  if (saved.startKw) document.getElementById('startKw').value = saved.startKw;
+  if (saved.endKw) document.getElementById('endKw').value = saved.endKw;
+});
 
 document.getElementById('toggleTrend').addEventListener('click', function(){
   const w = document.getElementById('trendWrap');
