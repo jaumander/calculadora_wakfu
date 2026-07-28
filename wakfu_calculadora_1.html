@@ -1846,6 +1846,7 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
       </table>
       <div class="export">
         <button class="ghost" id="btnExportDebug">Exportar eventos marcados 🐞</button>
+        <button class="ghost" id="btnValidateKnownCases">Validar casos conocidos</button>
       </div>
     </div>
     <div class="export">
@@ -2112,6 +2113,23 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
     URL.revokeObjectURL(url);
   });
 
+  document.getElementById('btnValidateKnownCases').addEventListener('click', async () => {
+    const cases = await loadKnownCases();
+    if (!cases.length){ alert('No hay casos conocidos guardados todavía (marca y exporta eventos 🐞 primero).'); return; }
+    const { matched, changed, notFound, totalCases } = validateKnownCases(cases, debugEvents);
+    let msg = `Casos conocidos: ${totalCases} en total.\n` +
+      `✓ Sin cambios: ${matched.length}\n` +
+      `— No presentes en este combate: ${notFound}\n` +
+      `⚠ Atribución distinta a la guardada: ${changed.length}`;
+    if (changed.length){
+      msg += '\n\n' + changed.slice(0, 10).map(c =>
+        `Línea: ${c.case.line}\n  Guardado: ${c.case.category} / ${c.case.target} / ${c.case.source}\n  Ahora: ${c.ahora.category} / ${c.ahora.target} / ${c.ahora.source}`
+      ).join('\n\n');
+      if (changed.length > 10) msg += `\n\n… y ${changed.length - 10} más.`;
+    }
+    alert(msg);
+  });
+
   document.getElementById('btnExport').addEventListener('click', () => {
     const blob = new Blob([JSON.stringify(players, null, 2)], {type:'application/json'});
     const url = URL.createObjectURL(blob);
@@ -2154,6 +2172,31 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
     status.textContent = 'Guardado ✓';
     renderHistoryList();
   });
+}
+
+// Compara los casos conocidos guardados contra los debugEvents del combate cargado ahora mismo,
+// buscando coincidencia por línea exacta de log (case.line === ev.line). Función pura (sin DOM)
+// para poder probarla con Node antes de tocar resolveSource/parseCombat en el futuro.
+function validateKnownCases(cases, debugEvents){
+  const byLine = new Map();
+  for (const ev of debugEvents){
+    if (!byLine.has(ev.line)) byLine.set(ev.line, []);
+    byLine.get(ev.line).push(ev);
+  }
+  const changed = [];
+  const matched = [];
+  let notFound = 0;
+  for (const c of cases){
+    const evs = byLine.get(c.line);
+    if (!evs || !evs.length){ notFound++; continue; }
+    const ev = evs.find(e => e.category === c.category && e.target === c.target) || evs[0];
+    if (ev.category !== c.category || ev.target !== c.target || ev.source !== c.source){
+      changed.push({ case: c, ahora: { category: ev.category, target: ev.target, source: ev.source } });
+    } else {
+      matched.push(c);
+    }
+  }
+  return { matched, changed, notFound, totalCases: cases.length };
 }
 
 function escapeHtml(s){
