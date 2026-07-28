@@ -368,7 +368,9 @@ wakfu-calc/
 - [x] Modo debug que aprende: correcciones de atribución (`{estado: jugador}`) confirmables desde
       la propia tabla de debug, guardadas en `window.storage`, aplicadas solas en próximos
       combates — alcance limitado a atribución, ver sección dedicada más arriba
-- [ ] Selector de idioma de la interfaz (ES/EN) — pendiente si se necesita
+- [x] Idioma de la interfaz: 100% español, por decisión de alcance (no un descuido). Se descartó
+      un selector ES/EN — no se quiere mantener ni testear varios idiomas. Si algún día hace falta
+      compartir la herramienta fuera de un grupo hispanohablante, se replantea entonces desde cero
 - [ ] Revisar eventos marcados como bug en el modo debug cuando el usuario los exporte
 - [x] Vista de tendencia (gráfico SVG, jugador/métrica seleccionables) cuando haya 3+
       combates guardados
@@ -422,6 +424,46 @@ wakfu-calc/
 4. Recordar qué desplegables estaban abiertos entre cálculos, solo en memoria de la sesión.
 5. Aviso específico cuando el archivo cargado no tiene formato de log de Wakfu reconocible.
 6. Botón "Copiar tabla como texto" en la tabla principal.
+
+## Copias de seguridad y memoria de roles — ALCANCE
+
+**Motivo:** `wakfu_chat.log` no tiene fecha (solo hora `HH:MM:SS,mmm`) y no hay documentación
+oficial de Ankama sobre cuándo el cliente lo limpia o rota — se comprobó en un log real subido
+por el usuario que dentro de una sesión continua no se corta (solo hay un salto de medianoche,
+`23:59` → `00:00`, sin pérdida de líneas), pero no se puede descartar que se sobrescriba al
+reiniciar el cliente. Como no se puede verificar la regla exacta, la mitigación no depende de
+adivinarla: la propia app guarda su propia copia en el momento en que ya tiene los datos en la
+mano, en vez de vigilar el archivo real (que además ni siquiera puede — el navegador solo lee el
+archivo una vez, al soltarlo, no mantiene acceso continuo a él).
+
+**Qué toca:**
+- Zona de carga de archivo: botón para descargar una copia local del log tal cual se cargó
+  (backup manual con clic explícito, nunca descarga automática sin que el usuario la pida).
+- Guardado en historial: cada combate guardado incluye ahora las líneas de log originales del
+  rango usado (`entry.rawLines`), para poder reabrir el modo debug / validar casos conocidos de
+  un combate guardado sin depender de que `wakfu_chat.log` siga teniendo esas líneas. Entradas
+  antiguas del historial sin este campo se siguen mostrando igual, solo sin esa opción extra.
+- Modal de clasificación aliado/enemigo (`openRoleModal`): recuerda por nombre la última
+  clasificación usada (`window.storage`/`localStorage`, mismo patrón que el resto) y la
+  preselecciona la próxima vez que aparezca ese nombre — pero SIEMPRE pidiendo confirmación,
+  nunca se salta el modal ni se infiere el rol a partir de las estadísticas del combate (un jefe
+  puede pegar y curar igual que un aliado, así que no hay forma fiable de inferirlo solo).
+
+**Qué NO toca:**
+- `parseCombat` / `resolveSource`.
+- No intenta detectar ni gestionar la rotación real de `wakfu_chat.log` — es estructuralmente
+  imposible de vigilar desde el navegador (ver "Motivo" arriba); la copia de seguridad es
+  responsabilidad de la persona, la app solo se lo pone fácil con un botón.
+- No infiere el rol aliado/enemigo por daño/curación ni por ningún otro dato del combate — solo
+  recuerda clasificaciones manuales anteriores por nombre exacto.
+
+**Milestones:**
+1. Botón "Descargar copia de este log" en la zona de carga de archivo.
+2. Guardar las líneas de log originales del rango en cada entrada nueva del historial.
+3. Recordar la clasificación aliado/enemigo por nombre y preseleccionarla en el modal (siempre
+   pidiendo confirmación).
+4. Nota de alcance "solo español" en este documento, descartando el selector de idioma ES/EN que
+   estaba en la lista de pendientes.
 
 ## Trabajo multi-sesión / multi-cuenta
 
