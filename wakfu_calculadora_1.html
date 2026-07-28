@@ -262,6 +262,9 @@
 let rawText = null;
 let currentResult = null; // { players, ambiguous, startLine, endLine } del último cálculo
 let historyCache = null;  // array de combates guardados, cacheado tras la primera carga
+// Qué desplegables del panel de resultados estaban abiertos, solo en memoria de esta pestaña
+// (no persiste al recargar la página) — se reaplica al recalcular otro combate en la misma sesión.
+let openPanels = { adv: false, mods: false, spells: false, debug: false };
 
 // --- Copiar al portapapeles, con fallback para contextos sin navigator.clipboard ---
 async function copyToClipboard(text){
@@ -1693,32 +1696,30 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
     });
   }
 
-  document.getElementById('toggleSpells').addEventListener('click', function(){
-    const w = document.getElementById('spellsWrap');
-    const open = w.style.display !== 'none';
-    w.style.display = open ? 'none' : 'block';
-    this.textContent = (open ? '▸' : '▾') + ' Ver desglose por hechizo (con elemento)';
-  });
-
-  document.getElementById('toggleAdv').addEventListener('click', function(){
-    const w = document.getElementById('advWrap');
-    const open = w.style.display !== 'none';
-    w.style.display = open ? 'none' : 'block';
-    this.textContent = (open ? '▸' : '▾') + ' Ver datos avanzados (armadura, golpes anticipados, ratios de eficiencia)';
-  });
-  document.getElementById('toggleMods').addEventListener('click', function(){
-    const w = document.getElementById('modsWrap');
-    const open = w.style.display !== 'none';
-    w.style.display = open ? 'none' : 'block';
-    this.textContent = (open ? '▸' : '▾') + ' Ver desglose de buffs/debuffs % aplicados a otros (por categoría)';
-  });
-
-  // --- Modo debug ---
-  document.getElementById('toggleDebug').addEventListener('click', function(){
-    const w = document.getElementById('debugWrap');
-    const open = w.style.display !== 'none';
-    w.style.display = open ? 'none' : 'block';
-    this.textContent = (open ? '▸' : '▾') + ' Modo debug (cada mensaje del chat, a quién se atribuyó y por qué)';
+  // Los 4 desplegables del panel de resultados comparten el mismo patrón (toggle + texto con
+  // flecha). Se agrupan en panelDefs para poder recordar, solo en memoria durante esta sesión de
+  // la pestaña (variable openPanels, sin persistencia), cuáles estaban abiertos y volver a
+  // abrirlos automáticamente al recalcular otro combate.
+  const panelDefs = [
+    { toggleId: 'toggleSpells', wrapId: 'spellsWrap', key: 'spells', label: ' Ver desglose por hechizo (con elemento)' },
+    { toggleId: 'toggleAdv', wrapId: 'advWrap', key: 'adv', label: ' Ver datos avanzados (armadura, golpes anticipados, ratios de eficiencia)' },
+    { toggleId: 'toggleMods', wrapId: 'modsWrap', key: 'mods', label: ' Ver desglose de buffs/debuffs % aplicados a otros (por categoría)' },
+    { toggleId: 'toggleDebug', wrapId: 'debugWrap', key: 'debug', label: ' Modo debug (cada mensaje del chat, a quién se atribuyó y por qué)' },
+  ];
+  panelDefs.forEach(def => {
+    const toggle = document.getElementById(def.toggleId);
+    const wrap = document.getElementById(def.wrapId);
+    if (!toggle || !wrap) return;
+    function setOpen(open){
+      wrap.style.display = open ? 'block' : 'none';
+      toggle.textContent = (open ? '▾' : '▸') + def.label;
+    }
+    toggle.addEventListener('click', () => {
+      const open = wrap.style.display === 'none';
+      openPanels[def.key] = open;
+      setOpen(open);
+    });
+    if (openPanels[def.key]) setOpen(true);
   });
 
   makeSortable(document.getElementById('debugTable'));
