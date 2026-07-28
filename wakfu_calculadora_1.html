@@ -263,6 +263,7 @@
   </div>
   <div id="historyNote" class="meta" style="margin-top:8px;"></div>
   <div id="compareWrap" style="margin-top:16px; display:none;"></div>
+  <div id="sessionBuilderWrap" style="margin-top:12px; display:none;"></div>
   <div class="meta" style="margin-top:16px; cursor:pointer;" id="toggleTrend">▸ Ver vista de tendencia (evolución entre combates guardados)</div>
   <div id="trendWrap" style="display:none; margin-top:10px;"></div>
 </div>
@@ -382,6 +383,30 @@ async function saveKeywords(startKw, endKw){
     try{ window.localStorage.setItem(KEYWORDS_LOCAL_KEY, JSON.stringify(keywordsCache)); }
     catch(e){ console.error('No se pudieron guardar las palabras clave en este navegador', e); }
   }
+}
+
+// --- Sesiones de mazmorra: agrupan combates ya guardados en el historial por su id, sin ---
+// --- copiar sus datos. Mismo patrón de persistencia que el historial: window.storage en el ---
+// --- panel, export/import JSON fuera de él (sin fallback a localStorage, igual que loadHistory).
+let sessionsCache = null;
+
+async function loadSessions(){
+  if (sessionsCache) return sessionsCache;
+  if (!hasStorage()){ sessionsCache = []; return sessionsCache; }
+  try{
+    const res = await window.storage.get('dungeonSessions', false);
+    sessionsCache = res && res.value ? JSON.parse(res.value) : [];
+  } catch(e){
+    sessionsCache = [];
+  }
+  return sessionsCache;
+}
+
+async function saveSessionsList(list){
+  sessionsCache = list;
+  if (!hasStorage()) return;
+  try{ await window.storage.set('dungeonSessions', JSON.stringify(list), false); }
+  catch(e){ console.error('No se pudo guardar la sesión de mazmorra', e); }
 }
 
 async function loadHistory(){
@@ -961,6 +986,7 @@ async function renderHistoryList(){
   if (!list.length){
     wrap.innerHTML = '<span style="color:var(--muted); font-size:13px;">Aún no hay combates guardados. Calcula uno y guárdalo abajo.</span>';
     updateCompareUI();
+    updateSessionBuilderUI();
     renderTrendUI(list);
     return;
   }
@@ -985,9 +1011,8 @@ async function renderHistoryList(){
 
   wrap.querySelectorAll('.historyCheck').forEach(cb => {
     cb.addEventListener('change', () => {
-      const checked = wrap.querySelectorAll('.historyCheck:checked');
-      if (checked.length > 2){ cb.checked = false; return; }
       updateCompareUI();
+      updateSessionBuilderUI();
     });
   });
   wrap.querySelectorAll('[data-classify]').forEach(btn => {
@@ -1004,6 +1029,7 @@ async function renderHistoryList(){
     });
   });
   updateCompareUI();
+  updateSessionBuilderUI();
   renderTrendUI(list);
 }
 
@@ -1187,6 +1213,33 @@ function updateCompareUI(){
   wrap.style.display = 'block';
   const ids = [...checked].map(c => c.dataset.id);
   renderComparison(ids[0], ids[1]);
+}
+
+// Con 2 o más combates marcados en el historial, muestra una barra para agruparlos en una
+// sesión de mazmorra nueva (solo guarda sus IDs, nunca copia sus datos — ver loadSessions).
+function updateSessionBuilderUI(){
+  const wrap = document.getElementById('sessionBuilderWrap');
+  if (!wrap) return;
+  const checked = document.querySelectorAll('.historyCheck:checked');
+  if (checked.length < 2){ wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+  wrap.style.display = 'block';
+  wrap.innerHTML = `
+    <div class="filters" style="align-items:center;">
+      <input type="text" id="sessionNameInput" placeholder="Nombre de la sesión (ej. Ereshkigal ultimate)" style="flex:1; min-width:200px;">
+      <button class="primary" id="btnCreateSession">Agrupar ${checked.length} combates en una sesión</button>
+    </div>`;
+  document.getElementById('btnCreateSession').addEventListener('click', async () => {
+    const nameInput = document.getElementById('sessionNameInput');
+    const name = nameInput.value.trim() || `Sesión ${new Date().toLocaleString('es-ES')}`;
+    const ids = [...document.querySelectorAll('.historyCheck:checked')].map(c => c.dataset.id);
+    const session = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 7), name, date: new Date().toISOString(), entryIds: ids };
+    const list = await loadSessions();
+    list.push(session);
+    await saveSessionsList(list);
+    document.querySelectorAll('.historyCheck:checked').forEach(cb => { cb.checked = false; });
+    updateCompareUI();
+    updateSessionBuilderUI();
+  });
 }
 
 function metricDelta(label, a, b, higherIsBetter, isPct){
