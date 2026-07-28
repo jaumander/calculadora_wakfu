@@ -1633,6 +1633,7 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
     </div>
     <div class="export">
       <button class="ghost" id="btnExport">Exportar JSON</button>
+      <button class="ghost" id="btnCopyMainTable">Copiar tabla como texto</button>
     </div>
     <div class="card" style="margin-top:20px;">
       <label>Guardar este combate en el historial</label>
@@ -1817,6 +1818,14 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
     URL.revokeObjectURL(url);
   });
 
+  document.getElementById('btnCopyMainTable').addEventListener('click', async function(){
+    const text = buildMainTableText(players, names);
+    const ok = await copyToClipboard(text);
+    const original = this.textContent;
+    this.textContent = ok ? '✓ Copiado' : '✗ No se pudo copiar';
+    setTimeout(() => { this.textContent = original; }, 1500);
+  });
+
   document.getElementById('btnSaveHistory').addEventListener('click', async () => {
     if (!currentResult) return;
     const nameInput = document.getElementById('saveName');
@@ -1847,6 +1856,25 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
 
 function escapeHtml(s){
   return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Construye una versión en texto plano de la tabla principal (mismas columnas y orden que se
+// muestran en pantalla), pensada para pegar en Discord o en el chat del juego sin exportar JSON
+// ni hacer captura. Función pura (sin DOM) para poder probarla con Node.
+function buildMainTableText(players, names){
+  const headers = ['Jugador','Daño hecho','Daño recibido','Curación hecha','Curación recibida','Hechizos','% Crítico','Derribos','Resurrecciones'];
+  const rows = names.map(n => {
+    const p = players[n];
+    const critPct = p.effectSpells ? ((p.effectCrits / p.effectSpells) * 100).toFixed(1) + '%' : '—';
+    return [
+      n, String(p.dmgDone), String(p.dmgReceived), String(p.healDone), String(p.healReceived),
+      String(p.spellsCast), critPct, String(p.koCount), String(p.revives)
+    ];
+  });
+  const widths = headers.map((h, i) => Math.max(h.length, ...rows.map(r => r[i].length)));
+  const fmtRow = r => r.map((cell, i) => cell.padEnd(widths[i])).join(' | ');
+  const sep = widths.map(w => '-'.repeat(w)).join('-|-');
+  return [fmtRow(headers), sep, ...rows.map(fmtRow)].join('\n');
 }
 
 // Ordenación genérica: clic en una <th class="sortable"> ordena su tabla por esa columna.
