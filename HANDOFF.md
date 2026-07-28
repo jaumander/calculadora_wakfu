@@ -6,17 +6,20 @@
 
 ## Estado: Nada en curso
 
-Última feature completada: casos conocidos (regresión del motor de atribución). Documentado en
-PROJECT.md, sección "Casos conocidos (regresión del motor de atribución) — ALCANCE". Los 3
-milestones commiteados y pusheados: 1/3 guardado persistente al exportar 🐞, 2/3 botón "Validar
-casos conocidos" en el modo debug (compara por línea exacta de log contra los `debugEvents`
-actuales), 3/3 export/import standalone. Corrección sobre la marcha: en un primer intento del
-milestone 3/3 se añadió una tarjeta nueva en la pantalla principal, que el propio alcance decía
-explícitamente que NO tocar — se revirtió y los botones de exportar/importar quedaron dentro del
-modo debug, junto a "Validar casos conocidos", sin superficie nueva visible fuera de ahí.
-No tocó `parseCombat` ni `resolveSource`, solo lee `debugEvents` ya calculados. Validado con Node:
-`validateKnownCases` con 3 escenarios (sin cambios, atribución distinta, caso no presente en el
-combate cargado) y deduplicación de import por `id`.
+Última feature completada: copias de seguridad y memoria de roles. Documentado en PROJECT.md,
+sección "Copias de seguridad y memoria de roles — ALCANCE". Los 4 milestones commiteados y
+pusheados: 1/4 botón "Descargar copia de este log" (descarga manual, con clic explícito, del
+texto tal cual se cargó, con nombre con timestamp), 2/4 cada entrada nueva del historial guarda
+las líneas de log originales del rango (`entry.rawLines`; entradas antiguas simplemente no lo
+tienen, sin migración necesaria), 3/4 el modal de clasificación aliado/enemigo preselecciona por
+nombre según la última clasificación recordada de cualquier combate anterior (siempre pidiendo
+confirmación, nunca automático ni basado en estadísticas del combate), 4/4 nota de alcance
+"100% español" en PROJECT.md, descartando el selector ES/EN que estaba pendiente.
+No tocó `parseCombat` ni `resolveSource`. No se intentó detectar/gestionar la rotación real de
+`wakfu_chat.log` (estructuralmente imposible desde el navegador, ver el "Motivo" de esa sección).
+Validado con Node: lógica de preselección + actualización de memoria de roles con 3 nombres
+(2 recordados, 1 nuevo clasificado a mano), además de los `node --check` de sintaxis en cada
+milestone.
 
 ## Plantilla a rellenar cuando se deja algo a medias
 
