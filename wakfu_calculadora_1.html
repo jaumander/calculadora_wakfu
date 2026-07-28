@@ -268,6 +268,14 @@
   <div id="trendWrap" style="display:none; margin-top:10px;"></div>
 </div>
 
+<div class="card" id="sessionsCard">
+  <label>Sesiones de mazmorra</label>
+  <div class="meta" style="margin-top:-6px; margin-bottom:10px;">Agrupa varios combates ya
+    guardados (marca 2 o más arriba en el historial) para ver el total de la mazmorra entera, no
+    solo combate a combate. Solo guarda referencias a los combates, nunca copia sus datos.</div>
+  <div id="sessionsList"><span style="color:var(--muted); font-size:13px;">Cargando…</span></div>
+</div>
+
 <div class="card" id="resolutionsCard">
   <label>Correcciones de atribución aprendidas</label>
   <div class="meta" style="margin-top:-6px; margin-bottom:10px;">Solo deciden a quién se atribuye
@@ -590,6 +598,24 @@ function splitByRole(entry){
     enemigos: names.filter(n => roles[n] === 'enemigo'),
     sinClasificar: names.filter(n => !roles[n])
   };
+}
+
+// Agrega los totales (aliados y enemigos por separado) de varios combates ya existentes del
+// historial — la lista de "entries" que se le pase. Reutiliza combatTotals/splitByRole/
+// subsetPlayers tal cual, sin tocarlas. Pura, sin DOM, para poder probarla con Node.
+function aggregateSessionTotals(entries){
+  const zero = () => ({ dmgDone:0, dmgReceived:0, healDone:0, healReceived:0, kos:0 });
+  const aliados = zero();
+  const enemigos = zero();
+  let unclassifiedCount = 0;
+  for (const e of entries){
+    const split = splitByRole(e);
+    const a = combatTotals(subsetPlayers(e.players, split.aliados));
+    const en = combatTotals(subsetPlayers(e.players, split.enemigos));
+    for (const k of Object.keys(aliados)){ aliados[k] += a[k]; enemigos[k] += en[k]; }
+    unclassifiedCount += split.sinClasificar.length;
+  }
+  return { aliados, enemigos, unclassifiedCount };
 }
 
 // --- Análisis con IA: media histórica por jugador, deltas %, y payload compacto para el prompt ---
@@ -976,6 +1002,53 @@ async function openRoleModal(entryIds, onSaved){
   });
 }
 
+async function renderSessionsList(){
+  const wrap = document.getElementById('sessionsList');
+  if (!wrap) return;
+  const sessions = await loadSessions();
+  if (!sessions.length){
+    wrap.innerHTML = '<span style="color:var(--muted); font-size:13px;">Aún no hay sesiones. Marca 2 o más combates en el historial de arriba y agrúpalos.</span>';
+    return;
+  }
+  const history = await loadHistory();
+  const sorted = [...sessions].sort((a,b) => new Date(b.date) - new Date(a.date));
+  wrap.innerHTML = sorted.map(session => {
+    const entries = session.entryIds.map(id => history.find(e => e.id === id)).filter(Boolean);
+    const missing = session.entryIds.length - entries.length;
+    const agg = aggregateSessionTotals(entries);
+    const missingNote = missing
+      ? ` <span style="color:var(--accent2);">· ${missing} combate(s) de esta sesión ya no están en el historial (se borraron)</span>`
+      : '';
+    const combatList = entries.map(e => `${escapeHtml(e.name)} (${fmtDate(e.date)})`).join(' · ');
+    const totalsTable = (agg.aliados.dmgDone + agg.aliados.healDone + agg.enemigos.dmgDone + agg.enemigos.healDone) === 0 && !agg.unclassifiedCount
+      ? ''
+      : `<table style="margin-top:8px;"><thead><tr><th></th><th>Aliados</th><th>Enemigos</th></tr></thead><tbody>
+          <tr><td>Daño hecho</td><td class="dmg">${Math.round(agg.aliados.dmgDone).toLocaleString('es-ES')}</td><td class="dmg">${Math.round(agg.enemigos.dmgDone).toLocaleString('es-ES')}</td></tr>
+          <tr><td>Curación hecha</td><td class="heal">${Math.round(agg.aliados.healDone).toLocaleString('es-ES')}</td><td class="heal">${Math.round(agg.enemigos.healDone).toLocaleString('es-ES')}</td></tr>
+          <tr><td>Derribos</td><td>${agg.aliados.kos}</td><td>${agg.enemigos.kos}</td></tr>
+        </tbody></table>${agg.unclassifiedCount ? `<div class="meta" style="margin-top:4px; color:var(--accent2);">${agg.unclassifiedCount} jugador(es)-combate sin clasificar como aliado/enemigo, fuera de estos totales.</div>` : ''}`;
+    return `<div style="padding:10px 0; border-bottom:1px solid var(--line);" data-session-id="${session.id}">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div style="flex:1;">
+          <div style="font-size:13px; font-weight:600; color:var(--text);">${escapeHtml(session.name)}</div>
+          <div style="font-size:11px; color:var(--muted);">${fmtDate(session.date)} — ${entries.length} combate(s): ${combatList}${missingNote}</div>
+        </div>
+        <button class="ghost" style="padding:4px 8px;" data-del-session="${session.id}">Borrar sesión</button>
+      </div>
+      ${totalsTable}
+    </div>`;
+  }).join('');
+
+  wrap.querySelectorAll('[data-del-session]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.delSession;
+      const list = (await loadSessions()).filter(s => s.id !== id);
+      await saveSessionsList(list);
+      renderSessionsList();
+    });
+  });
+}
+
 async function renderHistoryList(){
   const list = await loadHistory();
   const wrap = document.getElementById('historyList');
@@ -1239,6 +1312,7 @@ function updateSessionBuilderUI(){
     document.querySelectorAll('.historyCheck:checked').forEach(cb => { cb.checked = false; });
     updateCompareUI();
     updateSessionBuilderUI();
+    renderSessionsList();
   });
 }
 
@@ -2436,6 +2510,7 @@ function makeSortable(table){
 // --- Inicialización del historial (independiente de que haya un cálculo cargado) ---
 renderHistoryList();
 renderResolutionsList();
+renderSessionsList();
 
 loadKeywords().then(saved => {
   if (!saved) return;
