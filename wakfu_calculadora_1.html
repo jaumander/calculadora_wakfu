@@ -1508,9 +1508,10 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
         <td class="heal" data-sort="${sp.healTotal}">${sp.healTotal ? sp.healTotal.toLocaleString('es-ES') : '—'}${copyBtn(sp.lines)}</td>
       </tr>`;
     }
-    spellSections += `<div class="meta" style="margin-top:12px; font-weight:600; color:var(--text);">${escapeHtml(n)}</div>
+    spellSections += `<div class="spellPlayerBlock" data-player="${escapeHtml(n.toLowerCase())}">
+      <div class="meta" style="margin-top:12px; font-weight:600; color:var(--text);">${escapeHtml(n)}</div>
       <table class="spellTable"><thead><tr><th>Hechizo</th><th class="sortable">Golpes</th><th class="sortable">Críticos</th><th class="sortable">Daño</th><th class="sortable">Curación</th></tr></thead>
-      <tbody>${spellRows}</tbody></table>`;
+      <tbody>${spellRows}</tbody></table></div>`;
   }
 
   const ambigNote = ambiguous.length
@@ -1525,6 +1526,9 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
   results.innerHTML = `
     <div class="meta">Rango: <em>${escapeHtml(startLine)}</em> → <em>${escapeHtml(endLine)}</em></div>
     ${ambigNote}
+    <div class="filters" style="margin-bottom:10px;">
+      <input type="text" id="playerSearch" placeholder="Buscar jugador…" style="min-width:220px;">
+    </div>
     <table id="mainTable">
       <thead><tr>
         <th>Jugador</th><th class="sortable">Daño hecho</th><th class="sortable">Daño recibido</th>
@@ -1630,6 +1634,24 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
     </div>
   `;
   renderAICard();
+
+  // Buscador de jugador: filtra filas por el nombre en la primera columna de cada tabla, y
+  // bloques enteros (nombre + tabla de hechizos) en el desglose por hechizo. No toca el modo
+  // debug, que ya tiene su propio buscador con otra semántica (texto libre sobre toda la fila).
+  document.getElementById('playerSearch').addEventListener('input', function(){
+    const q = this.value.trim().toLowerCase();
+    ['mainTable', 'advTable', 'modsTable'].forEach(id => {
+      const table = document.getElementById(id);
+      if (!table) return;
+      table.querySelectorAll('tbody tr').forEach(tr => {
+        const name = (tr.children[0] && tr.children[0].textContent || '').toLowerCase();
+        tr.style.display = (!q || name.includes(q)) ? '' : 'none';
+      });
+    });
+    document.querySelectorAll('.spellPlayerBlock').forEach(block => {
+      block.style.display = (!q || block.dataset.player.includes(q)) ? '' : 'none';
+    });
+  });
 
   makeSortable(document.getElementById('mainTable'));
   makeSortable(document.getElementById('advTable'));
