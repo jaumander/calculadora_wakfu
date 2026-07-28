@@ -402,6 +402,30 @@ async function saveHistoryList(list){
   catch(e){ console.error('No se pudo guardar el historial persistente', e); }
 }
 
+// --- Casos conocidos: eventos marcados con 🐞 en el modo debug, persistidos para servir de red
+// de seguridad la próxima vez que se toque resolveSource/parseCombat. Mismo patrón que el
+// historial. Alcance deliberadamente limitado: no hay UI para editar/borrar casos uno a uno.
+let knownCasesCache = null;
+
+async function loadKnownCases(){
+  if (knownCasesCache) return knownCasesCache;
+  if (!hasStorage()){ knownCasesCache = []; return knownCasesCache; }
+  try{
+    const res = await window.storage.get('known_cases', false);
+    knownCasesCache = res && res.value ? JSON.parse(res.value) : [];
+  } catch(e){
+    knownCasesCache = [];
+  }
+  return knownCasesCache;
+}
+
+async function saveKnownCasesList(list){
+  knownCasesCache = list;
+  if (!hasStorage()) return;
+  try{ await window.storage.set('known_cases', JSON.stringify(list), false); }
+  catch(e){ console.error('No se pudieron guardar los casos conocidos', e); }
+}
+
 // --- Correcciones de atribución aprendidas en el modo debug ---
 // Alcance deliberadamente limitado: SOLO es un mapa { nombreEstado: nombreJugador }. No guarda
 // código, ni reglas nuevas, ni cambia regex de parseo — únicamente decide a quién se atribuye un
@@ -2054,7 +2078,7 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
     });
   });
 
-  document.getElementById('btnExportDebug').addEventListener('click', () => {
+  document.getElementById('btnExportDebug').addEventListener('click', async () => {
     const flagged = [];
     document.querySelectorAll('.bugCheck:checked').forEach(cb => {
       const idx = parseInt(cb.dataset.idx, 10);
@@ -2066,6 +2090,21 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
       });
     });
     if (!flagged.length){ alert('No has marcado ningún evento como posible bug todavía.'); return; }
+
+    // Además de exportar (como ya hacía), guardar cada caso como "conocido" persistente para
+    // poder validarlo más adelante contra futuros cambios de resolveSource/parseCombat.
+    const cases = await loadKnownCases();
+    const now = new Date().toISOString();
+    for (const f of flagged){
+      cases.push({
+        id: Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+        fecha: now, rango: `${startLine} → ${endLine}`,
+        line: f.linea_log, category: f.categoria, target: f.objetivo,
+        source: f.atribuido_a, reason: f.razon_del_sistema, nota: f.nota_del_usuario
+      });
+    }
+    await saveKnownCasesList(cases);
+
     const blob = new Blob([JSON.stringify({ rango: `${startLine} → ${endLine}`, eventos_marcados: flagged }, null, 2)], {type:'application/json'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
