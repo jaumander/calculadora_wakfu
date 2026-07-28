@@ -470,6 +470,48 @@ archivo una vez, al soltarlo, no mantiene acceso continuo a él).
 4. Nota de alcance "solo español" en este documento, descartando el selector de idioma ES/EN que
    estaba en la lista de pendientes.
 
+## Sesiones de mazmorra — ALCANCE
+
+**Motivo:** ahora mismo cada combate se guarda y analiza suelto. En la práctica, una mazmorra
+encadena varios combates seguidos (o varios intentos al mismo jefe), y no hay forma de ver el
+conjunto — solo combate a combate o comparando de dos en dos. El historial, las etiquetas, la
+comparativa y los roles aliado/enemigo ya existen; esta feature es una capa de agregación encima,
+sin tocar nada de cómo se calcula un combate individual.
+
+**Qué toca:**
+- Historial: las casillas de selección dejan de limitarse a 2. Con exactamente 2 marcadas se
+  sigue mostrando la comparativa de siempre (sin cambios ahí). Con 2 o más aparece además una
+  barra para agruparlas en una sesión nueva (campo de nombre + botón "Crear sesión").
+- Persistencia nueva `loadSessions()`/`saveSessionsList()`, mismo patrón que el historial:
+  `window.storage` en el panel, export/import JSON fuera de él. Una sesión es solo
+  `{ id, name, date, entryIds: [...] }` — una lista de IDs que apuntan a combates ya existentes
+  del historial, nunca una copia de sus datos.
+- Tarjeta nueva "Sesiones de mazmorra": por cada sesión guardada, total agregado (aliados y
+  enemigos por separado, reutilizando `combatTotals`/`splitByRole`/`subsetPlayers` ya existentes),
+  qué combate de la sesión fue el mejor/peor (criterio simple y explícito: menos derribos totales
+  de aliados, empate por daño hecho de aliados — nada de puntuaciones compuestas inventadas),
+  lista de combates que la componen, y borrar sesión (nunca borra los combates que contiene).
+
+**Qué NO toca:**
+- `parseCombat` / `resolveSource` / ninguna lógica de cálculo de un combate individual.
+- No copia datos de los combates dentro de la sesión — solo guarda sus IDs. Si se borra un
+  combate del historial, desaparece con gracia de cualquier sesión que lo tuviera (sin reventar,
+  sin dejar entradas fantasma en la UI).
+- La vista de tendencia actual (por jugador, entre combates sueltos) no se toca ni se le añade
+  agrupación por sesión en esta ronda — sigue funcionando exactamente igual que ahora. Se puede
+  plantear como ronda futura, pero queda fuera de este alcance.
+- El criterio de "mejor/peor combate" es deliberadamente simple (ver arriba) — no se inventa una
+  métrica ponderada ni un sistema de puntuación.
+
+**Milestones:**
+1. `loadSessions()`/`saveSessionsList()` + quitar el límite de 2 en las casillas del historial +
+   botón "Agrupar seleccionados en una sesión" (con nombre) cuando hay 2 o más marcadas.
+2. Tarjeta "Sesiones de mazmorra": listar sesiones, total agregado por sesión (aliados/enemigos),
+   combates que la componen, borrar sesión.
+3. Detectar el mejor/peor combate de la sesión con el criterio simple, y manejar con gracia los
+   IDs de combates que ya no existen en el historial.
+4. Export/import de sesiones (mismo patrón que historial/casos conocidos) para uso standalone.
+
 ## Trabajo multi-sesión / multi-cuenta
 
 Este proyecto se trabaja desde varias sesiones de Claude (distintas cuentas) en paralelo,
