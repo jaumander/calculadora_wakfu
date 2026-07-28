@@ -150,6 +150,11 @@
   .toggleBtn:hover{ color:var(--text); border-color:var(--gold); }
   .toggleBtn.on{ color:#1d1608; background:linear-gradient(var(--gold), var(--gold-dim));
     border-color:#00000055; }
+  .copyLineBtn{
+    font-size:10px; background:transparent; border:1px solid var(--line); color:var(--muted);
+    padding:1px 5px; border-radius:4px; cursor:pointer; margin-left:5px; vertical-align:middle;
+  }
+  .copyLineBtn:hover{ color:var(--accent); border-color:var(--accent); }
 
   .meta{ color:var(--muted); font-size:12.5px; line-height:1.6; margin:14px 0 18px; }
   .export{ margin-top:18px; }
@@ -257,6 +262,24 @@
 let rawText = null;
 let currentResult = null; // { players, ambiguous, startLine, endLine } del último cálculo
 let historyCache = null;  // array de combates guardados, cacheado tras la primera carga
+
+// --- Copiar al portapapeles, con fallback para contextos sin navigator.clipboard ---
+async function copyToClipboard(text){
+  try{
+    if (navigator.clipboard && window.isSecureContext){
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch(e){ /* sigue al fallback */ }
+  try{
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    return true;
+  } catch(e){ return false; }
+}
 
 function hasStorage(){
   return typeof window !== 'undefined' && window.storage && typeof window.storage.get === 'function';
@@ -1075,6 +1098,19 @@ fileInput.addEventListener('change', e => {
   if (e.target.files.length) loadFile(e.target.files[0]);
 });
 
+// Delegado en `results` (el div persiste entre recálculos, solo cambia su innerHTML) para
+// cualquier botón .copyLineBtn que aparezca dentro de las tablas de resultados.
+results.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.copyLineBtn');
+  if (!btn) return;
+  const text = btn.dataset.copy;
+  if (text === undefined) return;
+  const ok = await copyToClipboard(text);
+  const original = btn.textContent;
+  btn.textContent = ok ? '✓' : '✗';
+  setTimeout(() => { btn.textContent = original; }, 1200);
+});
+
 function loadFile(file){
   const reader = new FileReader();
   reader.onload = () => {
@@ -1377,6 +1413,16 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
     return ` title="${escapeHtml(cap)}"`;
   }
 
+  // Pequeño botón que copia la(s) línea(s) de log completas (no el resumen recortado de tt()).
+  // Filtra el aviso "⚠ Más de 2 derribos…" que se antepone a koLinesWithWarning, que no es una
+  // línea de log real y no debería copiarse.
+  function copyBtn(linesArr){
+    if (!linesArr || !linesArr.length) return '';
+    const full = linesArr.filter(l => typeof l === 'string' && !l.startsWith('⚠')).join('\n');
+    if (!full) return '';
+    return ` <button type="button" class="copyLineBtn" data-copy="${escapeHtml(full)}" title="Copiar línea(s) de log">📋</button>`;
+  }
+
   let rows = '';
   let rows2 = '';
   let modRows = '';
@@ -1401,8 +1447,8 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
       <td class="heal" data-sort="${p.healReceived}">${p.healReceived.toLocaleString('es-ES')}</td>
       <td>${p.spellsCast}</td>
       <td class="crit" data-sort="${critPct==='—'?-1:critPct}">${critPct}${critPct!=='—'?'%':''}</td>
-      <td${koFlag}${tt(koLinesWithWarning)}>${p.koCount}</td>
-      <td${tt(p.reviveLines)}>${p.revives}</td>
+      <td${koFlag}${tt(koLinesWithWarning)}>${p.koCount}${copyBtn(koLinesWithWarning)}</td>
+      <td${tt(p.reviveLines)}>${p.revives}${copyBtn(p.reviveLines)}</td>
     </tr>`;
     rows2 += `<tr>
       <td>${escapeHtml(n)}</td>
@@ -1423,7 +1469,7 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
           <td>${escapeHtml(n)}</td><td>${escapeHtml(cat)}</td><td class="heal">Buff</td>
           <td data-sort="${m.buffCount}">${m.buffCount}</td>
           <td class="total-cell" data-sum="${m.buffSum.toFixed(0)}" data-peak="${peak.toFixed(0)}" data-unit="${unit}" data-sort="${m.buffSum}">${m.buffSum.toFixed(0)}${unit}</td>
-          <td data-sort="${avgTurns==='—'?-1:avgTurns}">${avgTurns}</td></tr>`;
+          <td data-sort="${avgTurns==='—'?-1:avgTurns}">${avgTurns}${copyBtn(m.buffLines)}</td></tr>`;
       }
       if (m.debuffCount){
         const peak = Math.max(...(m.debuffValues || [m.debuffSum]));
@@ -1431,7 +1477,7 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
           <td>${escapeHtml(n)}</td><td>${escapeHtml(cat)}</td><td class="dmg">Debuff</td>
           <td data-sort="${m.debuffCount}">${m.debuffCount}</td>
           <td class="total-cell" data-sum="${m.debuffSum.toFixed(0)}" data-peak="${peak.toFixed(0)}" data-unit="${unit}" data-sort="${m.debuffSum}">${m.debuffSum.toFixed(0)}${unit}</td>
-          <td data-sort="${avgTurns==='—'?-1:avgTurns}">${avgTurns}</td></tr>`;
+          <td data-sort="${avgTurns==='—'?-1:avgTurns}">${avgTurns}${copyBtn(m.debuffLines)}</td></tr>`;
       }
     }
   }
@@ -1459,7 +1505,7 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
         <td><span class="dot" style="background:${dotColor}"></span>${escapeHtml(sn)}</td>
         <td data-sort="${sp.count}">${sp.count}</td><td data-sort="${sp.crits}">${sp.crits}</td>
         <td class="dmg" data-sort="${sp.dmgTotal}">${sp.dmgTotal ? sp.dmgTotal.toLocaleString('es-ES') : '—'}</td>
-        <td class="heal" data-sort="${sp.healTotal}">${sp.healTotal ? sp.healTotal.toLocaleString('es-ES') : '—'}</td>
+        <td class="heal" data-sort="${sp.healTotal}">${sp.healTotal ? sp.healTotal.toLocaleString('es-ES') : '—'}${copyBtn(sp.lines)}</td>
       </tr>`;
     }
     spellSections += `<div class="meta" style="margin-top:12px; font-weight:600; color:var(--text);">${escapeHtml(n)}</div>
