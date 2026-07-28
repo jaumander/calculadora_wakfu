@@ -4,22 +4,28 @@
 > parte de PROJECT.md con normalidad. Si NO está vacío, hay trabajo a medias — lee esto
 > ANTES de tocar código, para no reimplementar o pisar algo ya empezado.
 
-## Estado: Nada en curso
+## Estado: EN CURSO
 
-Última feature completada: copias de seguridad y memoria de roles. Documentado en PROJECT.md,
-sección "Copias de seguridad y memoria de roles — ALCANCE". Los 4 milestones commiteados y
-pusheados: 1/4 botón "Descargar copia de este log" (descarga manual, con clic explícito, del
-texto tal cual se cargó, con nombre con timestamp), 2/4 cada entrada nueva del historial guarda
-las líneas de log originales del rango (`entry.rawLines`; entradas antiguas simplemente no lo
-tienen, sin migración necesaria), 3/4 el modal de clasificación aliado/enemigo preselecciona por
-nombre según la última clasificación recordada de cualquier combate anterior (siempre pidiendo
-confirmación, nunca automático ni basado en estadísticas del combate), 4/4 nota de alcance
-"100% español" en PROJECT.md, descartando el selector ES/EN que estaba pendiente.
-No tocó `parseCombat` ni `resolveSource`. No se intentó detectar/gestionar la rotación real de
-`wakfu_chat.log` (estructuralmente imposible desde el navegador, ver el "Motivo" de esa sección).
-Validado con Node: lógica de preselección + actualización de memoria de roles con 3 nombres
-(2 recordados, 1 nuevo clasificado a mano), además de los `node --check` de sintaxis en cada
-milestone.
+**Feature/tarea:** Sesiones de mazmorra
+
+**Objetivo:** agrupar varios combates del historial en una "sesión" (mazmorra entera o varios
+intentos al mismo jefe) y ver el total agregado, no solo combate a combate. Alcance completo en
+PROJECT.md, sección "Sesiones de mazmorra — ALCANCE".
+
+**Hecho hasta ahora:** nada todavía, empezando milestone 1/4.
+
+**Falta por hacer:**
+- Milestone 1/4: `loadSessions()`/`saveSessionsList()` + quitar el límite de 2 en las casillas
+  del historial + botón "Agrupar seleccionados en una sesión" cuando hay 2+.
+- Milestone 2/4: tarjeta "Sesiones de mazmorra" con total agregado y combates que la componen.
+- Milestone 3/4: mejor/peor combate de la sesión + manejo de IDs huérfanos.
+- Milestone 4/4: export/import de sesiones.
+
+**Dónde tocar:** wakfu_calculadora_1.html — `renderHistoryList()`/`updateCompareUI()` (checkboxes
+y límite de 2), cerca de `loadHistory()`/`saveHistoryList()` para añadir las funciones gemelas de
+sesiones, y junto a `resolutionsCard`/`historyCard` en el HTML para la tarjeta nueva.
+
+**Cualquier cosa rota/a medio probar ahora mismo:** nada, todavía no se ha tocado código.
 
 ## Plantilla a rellenar cuando se deja algo a medias
 
