@@ -1002,6 +1002,20 @@ async function openRoleModal(entryIds, onSaved){
   });
 }
 
+// Mejor/peor combate de una sesión: criterio simple y explícito, sin puntuación inventada —
+// menos derribos totales de aliados; en empate, más daño hecho por los aliados. Con menos de 2
+// combates no hay "mejor/peor" que mostrar (devuelve null en ambos). Pura, sin DOM.
+function bestWorstCombat(entries){
+  if (entries.length < 2) return { best: null, worst: null };
+  const scored = entries.map(e => {
+    const split = splitByRole(e);
+    const t = combatTotals(subsetPlayers(e.players, split.aliados));
+    return { entry: e, kos: t.kos, dmgDone: t.dmgDone };
+  });
+  const sorted = [...scored].sort((a,b) => a.kos - b.kos || b.dmgDone - a.dmgDone);
+  return { best: sorted[0].entry, worst: sorted[sorted.length - 1].entry };
+}
+
 async function renderSessionsList(){
   const wrap = document.getElementById('sessionsList');
   if (!wrap) return;
@@ -1020,6 +1034,10 @@ async function renderSessionsList(){
       ? ` <span style="color:var(--accent2);">· ${missing} combate(s) de esta sesión ya no están en el historial (se borraron)</span>`
       : '';
     const combatList = entries.map(e => `${escapeHtml(e.name)} (${fmtDate(e.date)})`).join(' · ');
+    const { best, worst } = bestWorstCombat(entries);
+    const bestWorstNote = (best && worst && best !== worst)
+      ? `<div class="meta" style="margin-top:4px;">Mejor intento: <span class="heal">${escapeHtml(best.name)}</span> · Peor intento: <span class="dmg">${escapeHtml(worst.name)}</span> <span style="color:var(--muted);">(criterio: menos derribos de aliados; empate, más daño hecho)</span></div>`
+      : '';
     const totalsTable = (agg.aliados.dmgDone + agg.aliados.healDone + agg.enemigos.dmgDone + agg.enemigos.healDone) === 0 && !agg.unclassifiedCount
       ? ''
       : `<table style="margin-top:8px;"><thead><tr><th></th><th>Aliados</th><th>Enemigos</th></tr></thead><tbody>
@@ -1035,6 +1053,7 @@ async function renderSessionsList(){
         </div>
         <button class="ghost" style="padding:4px 8px;" data-del-session="${session.id}">Borrar sesión</button>
       </div>
+      ${bestWorstNote}
       ${totalsTable}
     </div>`;
   }).join('');
