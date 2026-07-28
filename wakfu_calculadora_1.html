@@ -555,12 +555,39 @@ function pctChange(current, avg){
   return Math.round(((current - avg) / Math.abs(avg)) * 1000) / 10;
 }
 
-function buildAIPayload(players, history){
+// Filtra combates del historial cuyas etiquetas (jefe/mazmorra/dificultad) coincidan con las
+// indicadas en tagFilter. Solo compara los campos de tagFilter que NO estén vacíos — si tagFilter
+// no trae ningún campo relleno, devuelve el historial sin tocar. Comparación insensible a
+// mayúsculas/espacios sobrantes. Pura, reutilizada por el Análisis con IA y la Vista de tendencia.
+function filterHistoryByTags(history, tagFilter){
+  const norm = s => (s || '').trim().toLowerCase();
+  const wantBoss = norm(tagFilter && tagFilter.boss);
+  const wantDungeon = norm(tagFilter && tagFilter.dungeon);
+  const wantDifficulty = norm(tagFilter && tagFilter.difficulty);
+  if (!wantBoss && !wantDungeon && !wantDifficulty) return history;
+  return history.filter(e => {
+    const t = e.tags || {};
+    if (wantBoss && norm(t.boss) !== wantBoss) return false;
+    if (wantDungeon && norm(t.dungeon) !== wantDungeon) return false;
+    if (wantDifficulty && norm(t.difficulty) !== wantDifficulty) return false;
+    return true;
+  });
+}
+
+function buildAIPayload(players, history, tagFilter){
+  const anyTag = !!(tagFilter && (tagFilter.boss || tagFilter.dungeon || tagFilter.difficulty));
+  let historyForAvg = history;
+  let modo = 'sin_etiquetas';
+  if (anyTag){
+    const filtered = filterHistoryByTags(history, tagFilter);
+    if (filtered.length){ historyForAvg = filtered; modo = 'filtrado'; }
+    else { modo = 'fallback_sin_coincidencias'; }
+  }
   const jugadores = [];
   for (const n in players){
     const p = players[n];
     const critPct = p.effectSpells ? Math.round(p.effectCrits / p.effectSpells * 1000) / 10 : null;
-    const hist = computePlayerHistoryAvg(history, n);
+    const hist = computePlayerHistoryAvg(historyForAvg, n);
     jugadores.push({
       jugador: n,
       combate_actual: {
@@ -582,18 +609,55 @@ function buildAIPayload(players, history){
       } : null
     });
   }
-  return { combates_en_historial: history.length, jugadores };
+  return {
+    comparacion: {
+      modo, // 'sin_etiquetas' | 'filtrado' | 'fallback_sin_coincidencias'
+      combates_usados: historyForAvg.length,
+      combates_en_historial_total: history.length,
+      etiquetas: anyTag ? {
+        jefe: (tagFilter.boss || '').trim() || null,
+        mazmorra: (tagFilter.dungeon || '').trim() || null,
+        dificultad: (tagFilter.difficulty || '').trim() || null
+      } : null
+    },
+    jugadores
+  };
 }
 
 function buildAIPrompt(payload){
   return 'Eres un analista de combates del videojuego Wakfu. Te paso datos numéricos YA CALCULADOS '
     + 'de un combate reciente, con la media histórica de cada jugador (si existe) y el cambio '
-    + 'porcentual frente a esa media (campo delta_pct_vs_media). Da como máximo 3 consejos concretos '
-    + 'y accionables en español, priorizando los cambios porcentuales más grandes (buenos o malos) y '
-    + 'el peor rendimiento relativo. Interpreta los números, no los repitas tal cual. Si un jugador '
-    + 'tiene media_historica: null, no inventes una comparación para él, coméntalo solo por sus '
-    + 'valores absolutos si aporta algo. No devuelvas JSON ni markdown: solo una lista numerada en '
-    + 'texto plano, cada consejo de 1-2 frases.\n\nDatos:\n' + JSON.stringify(payload);
+    + 'porcentual frente a esa media (campo delta_pct_vs_media). El campo comparacion.modo indica '
+    + 'contra qué se comparó: "filtrado" significa que la media es solo de combates guardados con '
+    + 'las mismas etiquetas de jefe/mazmorra/dificultad (compáralo explícitamente contra "tus otros '
+    + 'intentos a este mismo jefe/mazmorra" si aplica); "fallback_sin_coincidencias" significa que '
+    + 'se pidió ese filtro pero no había combates guardados con esas etiquetas, así que se usó el '
+    + 'historial general — dilo también; "sin_etiquetas" es la comparación general de siempre. Da '
+    + 'como máximo 3 consejos concretos y accionables en español, priorizando los cambios '
+    + 'porcentuales más grandes (buenos o malos) y el peor rendimiento relativo. Interpreta los '
+    + 'números, no los repitas tal cual. Si un jugador tiene media_historica: null, no inventes una '
+    + 'comparación para él, coméntalo solo por sus valores absolutos si aporta algo. No devuelvas '
+    + 'JSON ni markdown: solo una lista numerada en texto plano, cada consejo de 1-2 frases.'
+    + '\n\nDatos:\n' + JSON.stringify(payload);
+}
+
+// Línea informativa que se antepone a los consejos, explicando contra qué se comparó — para que
+// el usuario no tenga que adivinar si el filtro de etiquetas se aplicó de verdad.
+function aiContextLine(payload){
+  const c = payload.comparacion;
+  if (!c) return '';
+  if (c.modo === 'filtrado'){
+    const et = c.etiquetas || {};
+    const partes = [et.jefe, et.mazmorra, et.dificultad].filter(Boolean).join(' · ');
+    return `<div class="meta" style="margin-bottom:8px;">Comparado contra ${c.combates_usados} `
+      + `combate(s) guardado(s) con las mismas etiquetas (${escapeHtml(partes)}).</div>`;
+  }
+  if (c.modo === 'fallback_sin_coincidencias'){
+    return `<div class="meta" style="margin-bottom:8px; color:var(--accent2);">No había combates `
+      + `guardados con esas etiquetas — comparado contra tu historial general `
+      + `(${c.combates_en_historial_total} combate(s)).</div>`;
+  }
+  return '';
 }
 
 function renderAITips(text){
@@ -606,10 +670,18 @@ function renderAITips(text){
 
 let aiAnalysisCache = {}; // clave startLine||endLine -> HTML de consejos ya generado en esta sesión
 
-function showAITipsWithRegen(out, tipsHtml){
-  out.innerHTML = tipsHtml + '<div class="meta" style="margin-top:8px; cursor:pointer;" id="aiRegenLink">↻ Volver a generar (gasta otra llamada a la IA)</div>';
+function showAITipsWithRegen(out, contentHtml){
+  out.innerHTML = contentHtml + '<div class="meta" style="margin-top:8px; cursor:pointer;" id="aiRegenLink">↻ Volver a generar (gasta otra llamada a la IA)</div>';
   const link = document.getElementById('aiRegenLink');
   if (link) link.addEventListener('click', () => runAIAnalysis(true));
+}
+
+// Lee los campos de etiqueta del formulario "Guardar en historial" tal cual estén rellenos en
+// este momento, aunque el combate todavía no se haya guardado — así el filtro por etiqueta se
+// puede usar antes de pulsar "Guardar".
+function currentTagFilterFromForm(){
+  const val = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+  return { boss: val('saveTagBoss'), dungeon: val('saveTagDungeon'), difficulty: val('saveTagDifficulty') };
 }
 
 async function runAIAnalysis(force){
@@ -623,7 +695,8 @@ async function runAIAnalysis(force){
     out.innerHTML = '<div class="meta" style="color:var(--dmg);">Falta guardar una clave de API antes de analizar.</div>';
     return;
   }
-  const cacheKey = currentResult.startLine + '||' + currentResult.endLine;
+  const tagFilter = currentTagFilterFromForm();
+  const cacheKey = currentResult.startLine + '||' + currentResult.endLine + '||' + JSON.stringify(tagFilter);
   if (!force && aiAnalysisCache[cacheKey]){
     showAITipsWithRegen(out, aiAnalysisCache[cacheKey]);
     return;
@@ -632,7 +705,7 @@ async function runAIAnalysis(force){
   out.innerHTML = '<span style="color:var(--muted); font-size:13px;">Pensando…</span>';
   try{
     const history = await loadHistory();
-    const payload = buildAIPayload(currentResult.players, history);
+    const payload = buildAIPayload(currentResult.players, history, tagFilter);
     const prompt = buildAIPrompt(payload);
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -647,9 +720,9 @@ async function runAIAnalysis(force){
     const data = await response.json();
     const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
     if (!text.trim()) throw new Error('respuesta vacía');
-    const tipsHtml = renderAITips(text);
-    aiAnalysisCache[cacheKey] = tipsHtml;
-    showAITipsWithRegen(out, tipsHtml);
+    const contentHtml = aiContextLine(payload) + renderAITips(text);
+    aiAnalysisCache[cacheKey] = contentHtml;
+    showAITipsWithRegen(out, contentHtml);
   } catch(err){
     const hint = hasStorage()
       ? 'Inténtalo de nuevo en un momento.'
@@ -667,8 +740,9 @@ async function runAIAnalysis(force){
 function renderAICard(){
   const body = document.getElementById('aiCardBody');
   if (!body) return;
-  const baseDesc = 'Compara este combate con la media de tu historial guardado y te da hasta 3 '
-    + 'consejos concretos de dónde poner el foco.';
+  const baseDesc = 'Compara este combate con la media de tu historial guardado (o, si rellenas '
+    + 'Jefe/Mazmorra/Dificultad arriba, solo contra combates con esas mismas etiquetas) y te da '
+    + 'hasta 3 consejos concretos de dónde poner el foco.';
 
   if (hasStorage()){
     body.innerHTML = `
