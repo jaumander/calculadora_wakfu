@@ -266,6 +266,25 @@ caja de texto para anotar el motivo. Botón "Exportar eventos marcados" descarga
 línea + categoría + atribución + razón del sistema + nota del usuario, pensado para pegárselo a
 Claude y depurar casos concretos juntos.
 
+### Click-to-filter: de un dato concreto de cualquier tabla a sus líneas exactas en modo debug
+
+Con combates largos, buscar a mano en el modo debug qué líneas forman un número concreto (ej.
+"daño recibido por Ofrizz") era tedioso incluso con el filtro por categoría. Ahora casi todas las
+celdas de datos de las demás tablas (tabla principal, avanzada, mods, desglose por hechizo) son
+clicables: al pulsarlas, se abre el modo debug (si estaba cerrado) y se filtra **solo** a los
+eventos que forman ese dato exacto, con un chip "Filtrando: …" y botón para quitar el filtro.
+
+- No toca `parseCombat`: reutiliza los campos que ya guarda cada evento (categoría/objetivo/
+  atribuido/línea) y, para hechizos concretos, las líneas exactas que ya guarda cada
+  `p.spells[nombre].lines` — por eso "Daño" de un hechizo con robo de vida excluye correctamente
+  las líneas de curación de ese mismo hechizo (y viceversa).
+- El filtro fijado (`pinnedFilter`) tiene prioridad sobre el desplegable de categoría y la
+  búsqueda de texto, que se deshabilitan mientras esté activo; se combina con el filtro de "solo
+  marcados 🐞" si también está encendido.
+- Se probó con `jsdom` simulando clics reales (no solo revisando el código): daño/curación hecho
+  y recibido, armadura dada, un hechizo concreto con robo de vida, una fila de mods, y que un
+  recálculo con un combate distinto no deja "colgado" el filtro del combate anterior.
+
 ## Limitaciones conocidas (algunas deliberadas, no por desconocimiento)
 
 - **PA/PM/PW, resistencia y esquiva/placaje dados (en positivo) NO se trackean.** El texto del
@@ -310,6 +329,8 @@ wakfu-calc/
 - [x] Tooltips con la línea de log original en cada fila (derribos, resurrecciones, mods, hechizos)
 - [x] Motor de atribución de efectos de zona/aura (dueño de estado) con detección de ambigüedad
 - [x] Modo debug: línea + razón de atribución por evento, flag de bug + nota, exportación a JSON
+- [x] Click-to-filter: clic en un dato concreto de cualquier tabla abre y filtra el modo debug
+      a solo los eventos que forman ese número exacto (ver sección dedicada más arriba)
 - [x] Historial persistente de combates (guardado con nombre, `window.storage` en el panel de
       chat, export/import `wakfu_historial.json` para uso como archivo suelto)
 - [x] Comparativa entre 2 combates guardados: totales del grupo y desglose por jugador con
