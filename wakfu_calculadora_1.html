@@ -1346,7 +1346,7 @@ function detectSessions(lines, startKw, endKw){
 function computeAndRenderSession(lines, session, resolutions){
   const slice = lines.slice(session.startIdx + 1, session.endIdx);
   const { players, ambiguous, debugEvents } = parseCombat(slice, resolutions);
-  renderResults(players, ambiguous, debugEvents, lines[session.startIdx], lines[session.endIdx]);
+  renderResults(players, ambiguous, debugEvents, lines[session.startIdx], lines[session.endIdx], slice);
   return slice.length;
 }
 
@@ -1643,14 +1643,14 @@ function parseCombat(lines, resolutions){
   return { players, ambiguous, debugEvents };
 }
 
-function renderResults(players, ambiguous, debugEvents, startLine, endLine){
+function renderResults(players, ambiguous, debugEvents, startLine, endLine, rawLines){
   const names = Object.keys(players);
   if (!names.length){
     results.innerHTML = '<div class="meta">No se detectaron eventos de combate en ese rango.</div>';
     currentResult = null;
     return;
   }
-  currentResult = { players, ambiguous, startLine, endLine };
+  currentResult = { players, ambiguous, startLine, endLine, rawLines: rawLines || [] };
   names.sort((a,b) => players[b].dmgDone - players[a].dmgDone);
 
   function tt(linesArr){
@@ -2228,7 +2228,11 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
       endLine: currentResult.endLine,
       tags,
       roles: {},
-      players: currentResult.players
+      players: currentResult.players,
+      // Líneas de log originales del rango (backup por si wakfu_chat.log se limpia/rota antes de
+      // volver a necesitarlas — ver PROJECT.md "Copias de seguridad y memoria de roles"). Entradas
+      // guardadas antes de esta feature simplemente no tienen este campo.
+      rawLines: currentResult.rawLines
     };
     const list = await loadHistory();
     list.push(entry);
