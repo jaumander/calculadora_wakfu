@@ -835,6 +835,43 @@ function renderAICard(){
 // alguno de ellos, se preselecciona. Al guardar, aplica el rol elegido a ese nombre en TODOS los
 // combates pasados que lo contengan (un personaje se asume del mismo bando en los combates que
 // se están clasificando juntos). No toca combates fuera de entryIds.
+// --- Recordar la clasificación aliado/enemigo por nombre, entre sesiones y entre combates ---
+// Mismo patrón que loadKeywords/saveKeywords: window.storage en el panel, localStorage fuera.
+// Es solo una preselección en el modal — nunca decide por sí sola ni se salta la confirmación.
+let roleMemoryCache = null;
+const ROLE_MEMORY_LOCAL_KEY = 'wakfu_calc_role_memory';
+
+async function loadRoleMemory(){
+  if (roleMemoryCache) return roleMemoryCache;
+  if (hasStorage()){
+    try{
+      const res = await window.storage.get('roleMemory', false);
+      roleMemoryCache = res && res.value ? JSON.parse(res.value) : {};
+    } catch(e){ roleMemoryCache = {}; }
+    return roleMemoryCache;
+  }
+  if (hasLocalStorage()){
+    try{
+      const raw = window.localStorage.getItem(ROLE_MEMORY_LOCAL_KEY);
+      roleMemoryCache = raw ? JSON.parse(raw) : {};
+    } catch(e){ roleMemoryCache = {}; }
+  } else {
+    roleMemoryCache = {};
+  }
+  return roleMemoryCache;
+}
+
+async function saveRoleMemory(memory){
+  roleMemoryCache = memory;
+  if (hasStorage()){
+    try{ await window.storage.set('roleMemory', JSON.stringify(memory), false); }
+    catch(e){ console.error('No se pudo guardar la memoria de roles', e); }
+  } else if (hasLocalStorage()){
+    try{ window.localStorage.setItem(ROLE_MEMORY_LOCAL_KEY, JSON.stringify(memory)); }
+    catch(e){ console.error('No se pudo guardar la memoria de roles en este navegador', e); }
+  }
+}
+
 async function openRoleModal(entryIds, onSaved){
   const list = await loadHistory();
   const entries = entryIds.map(id => list.find(e => e.id === id)).filter(Boolean);
@@ -846,6 +883,13 @@ async function openRoleModal(entryIds, onSaved){
     for (const e of entries){
       if (e.roles && e.roles[n]){ selections[n] = e.roles[n]; break; }
     }
+  });
+  // Para los nombres sin clasificación propia en estos combates, se preselecciona (no se decide
+  // por ellos) con la última clasificación recordada para ese mismo nombre en cualquier combate
+  // anterior. El usuario sigue teniendo que pulsar "Guardar clasificación" para confirmarlo.
+  const roleMemory = await loadRoleMemory();
+  names.forEach(n => {
+    if (!selections[n] && roleMemory[n]) selections[n] = roleMemory[n];
   });
 
   document.getElementById('roleModalOverlay')?.remove();
@@ -894,6 +938,14 @@ async function openRoleModal(entryIds, onSaved){
       }
     }
     await saveHistoryList(freshList);
+    // Actualiza la memoria de roles por nombre para futuros combates (solo los nombres que se
+    // clasificaron explícitamente ahora; los que quedaron sin marcar no borran lo recordado antes).
+    const memory = await loadRoleMemory();
+    let memoryChanged = false;
+    for (const n of Object.keys(selections)){
+      if (selections[n] && memory[n] !== selections[n]){ memory[n] = selections[n]; memoryChanged = true; }
+    }
+    if (memoryChanged) await saveRoleMemory(memory);
     overlay.remove();
     if (onSaved) onSaved();
   });
