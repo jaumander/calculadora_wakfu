@@ -248,6 +248,7 @@
 
   <button class="primary" id="btnSubmit" disabled>Calcular</button>
   <button class="ghost" id="btnReset">Reiniciar</button>
+  <button class="ghost" id="btnBackupLog" disabled>Descargar copia de este log</button>
   <div id="status"></div>
   <div id="sessionPicker" style="display:none; margin-top:14px;"></div>
 </div>
@@ -1241,6 +1242,7 @@ const fileInput = document.getElementById('fileInput');
 const fname = document.getElementById('fname');
 const btnSubmit = document.getElementById('btnSubmit');
 const btnReset = document.getElementById('btnReset');
+const btnBackupLog = document.getElementById('btnBackupLog');
 const status = document.getElementById('status');
 const results = document.getElementById('results');
 
@@ -1284,6 +1286,7 @@ function loadFile(file){
     rawText = reader.result;
     fname.textContent = file.name + ' — ' + (file.size/1024).toFixed(0) + ' KB';
     btnSubmit.disabled = false;
+    btnBackupLog.disabled = false;
     status.textContent = looksLikeWakfuLog(rawText)
       ? ''
       : '⚠ Este archivo no parece tener el formato de wakfu_chat.log (línea con hora "HH:MM:SS,mmm - [Canal]"). Puedes intentar calcular igualmente, pero revisa que sea el archivo correcto.';
@@ -1293,9 +1296,23 @@ function loadFile(file){
 
 btnReset.addEventListener('click', () => {
   rawText = null; fileInput.value=''; fname.textContent=''; btnSubmit.disabled = true;
+  btnBackupLog.disabled = true;
   results.innerHTML=''; status.textContent='';
   document.getElementById('startKw').value = 'inicio calculadora';
   document.getElementById('endKw').value = 'fin calculadora';
+});
+
+// Copia de seguridad manual: descarga el texto tal cual se cargó, con nombre único por fecha/hora,
+// para no depender de si/cuándo Wakfu limpia el wakfu_chat.log real (no hay forma de saberlo desde
+// el navegador, ver PROJECT.md "Copias de seguridad y memoria de roles").
+btnBackupLog.addEventListener('click', () => {
+  if (!rawText) return;
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const blob = new Blob([rawText], {type: 'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `wakfu_chat_backup_${stamp}.log`; a.click();
+  URL.revokeObjectURL(url);
 });
 
 // Detecta TODAS las sesiones inicio/fin de un log, no solo la última. Empareja cada "fin" con
