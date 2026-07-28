@@ -382,6 +382,9 @@ wakfu-calc/
 - [x] Mejoras QoL (carga de log, tablas, desplegables) — ver sección dedicada más arriba: recordar
       palabras clave, copiar líneas de log, buscador de jugador, recordar desplegables abiertos en
       la sesión, aviso si el archivo no parece un log de Wakfu, copiar tabla principal como texto
+- [x] Casos conocidos (regresión del motor de atribución) — persistencia de eventos marcados con
+      🐞, botón "Validar casos conocidos" en el modo debug, export/import standalone. Ver sección
+      dedicada más arriba. Fontanería interna: sin tarjeta nueva en pantalla principal a propósito
 - [x] Clasificación aliado/enemigo por combate (modal + `entry.roles`), Total del grupo dividido
       en Aliados/Enemigos en la comparativa, en vez de amalgamar ambos bandos
 - [x] Filtro por etiquetas (jefe/mazmorra/dificultad) en Análisis con IA y Vista de tendencia —

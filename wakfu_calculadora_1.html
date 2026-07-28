@@ -1847,6 +1847,10 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
       <div class="export">
         <button class="ghost" id="btnExportDebug">Exportar eventos marcados 🐞</button>
         <button class="ghost" id="btnValidateKnownCases">Validar casos conocidos</button>
+        <button class="ghost" id="btnExportKnownCases">Exportar casos conocidos</button>
+        <button class="ghost" id="btnImportKnownCases">Importar casos conocidos</button>
+        <input type="file" id="knownCasesFileInput" accept=".json" style="display:none">
+        <div id="knownCasesNote" class="meta" style="margin-top:8px;"></div>
       </div>
     </div>
     <div class="export">
@@ -2128,6 +2132,49 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
       if (changed.length > 10) msg += `\n\n… y ${changed.length - 10} más.`;
     }
     alert(msg);
+  });
+
+  (async () => {
+    const note = document.getElementById('knownCasesNote');
+    const cases = await loadKnownCases();
+    note.textContent = cases.length
+      ? `${cases.length} caso(s) guardado(s) en total.`
+      : 'Todavía no hay casos guardados — marca eventos con 🐞 y pulsa "Exportar eventos marcados".';
+  })();
+
+  document.getElementById('btnExportKnownCases').addEventListener('click', async () => {
+    const cases = await loadKnownCases();
+    if (!cases.length){ alert('No hay casos conocidos guardados todavía.'); return; }
+    const blob = new Blob([JSON.stringify(cases, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'wakfu_casos_conocidos.json'; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  document.getElementById('btnImportKnownCases').addEventListener('click', () => {
+    document.getElementById('knownCasesFileInput').click();
+  });
+
+  document.getElementById('knownCasesFileInput').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try{
+        const imported = JSON.parse(reader.result);
+        if (!Array.isArray(imported)) throw new Error('formato inesperado');
+        const current = await loadKnownCases();
+        const existingIds = new Set(current.map(c => c.id));
+        const merged = [...current, ...imported.filter(c => c && c.id && !existingIds.has(c.id))];
+        await saveKnownCasesList(merged);
+        document.getElementById('knownCasesNote').textContent = `${merged.length} caso(s) guardado(s) en total.`;
+      } catch(err){
+        alert('No se ha podido leer el archivo. ¿Es un wakfu_casos_conocidos.json válido?');
+      }
+    };
+    reader.readAsText(file, 'utf-8');
+    e.target.value = '';
   });
 
   document.getElementById('btnExport').addEventListener('click', () => {
