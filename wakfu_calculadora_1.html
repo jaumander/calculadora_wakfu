@@ -274,6 +274,11 @@
     guardados (marca 2 o más arriba en el historial) para ver el total de la mazmorra entera, no
     solo combate a combate. Solo guarda referencias a los combates, nunca copia sus datos.</div>
   <div id="sessionsList"><span style="color:var(--muted); font-size:13px;">Cargando…</span></div>
+  <div style="margin-top:14px;">
+    <button class="ghost" id="btnExportSessions">Exportar sesiones</button>
+    <button class="ghost" id="btnImportSessions">Importar sesiones</button>
+    <input type="file" id="sessionsFileInput" accept=".json" style="display:none">
+  </div>
 </div>
 
 <div class="card" id="resolutionsCard">
@@ -2573,6 +2578,41 @@ document.getElementById('historyFileInput').addEventListener('change', async (e)
       renderHistoryList();
     } catch(err){
       alert('No se ha podido leer el archivo de historial. ¿Es un wakfu_historial.json válido?');
+    }
+  };
+  reader.readAsText(file, 'utf-8');
+  e.target.value = '';
+});
+
+document.getElementById('btnExportSessions').addEventListener('click', async () => {
+  const list = await loadSessions();
+  if (!list.length){ alert('No hay sesiones guardadas todavía.'); return; }
+  const blob = new Blob([JSON.stringify(list, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'wakfu_sesiones.json'; a.click();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('btnImportSessions').addEventListener('click', () => {
+  document.getElementById('sessionsFileInput').click();
+});
+
+document.getElementById('sessionsFileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try{
+      const imported = JSON.parse(reader.result);
+      if (!Array.isArray(imported)) throw new Error('formato inesperado');
+      const current = await loadSessions();
+      const existingIds = new Set(current.map(s => s.id));
+      const merged = [...current, ...imported.filter(s => s && s.id && Array.isArray(s.entryIds) && !existingIds.has(s.id))];
+      await saveSessionsList(merged);
+      renderSessionsList();
+    } catch(err){
+      alert('No se ha podido leer el archivo. ¿Es un wakfu_sesiones.json válido?');
     }
   };
   reader.readAsText(file, 'utf-8');
