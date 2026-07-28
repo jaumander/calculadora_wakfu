@@ -285,6 +285,36 @@ eventos que forman ese dato exacto, con un chip "Filtrando: …" y botón para q
   y recibido, armadura dada, un hechizo concreto con robo de vida, una fila de mods, y que un
   recálculo con un combate distinto no deja "colgado" el filtro del combate anterior.
 
+## Casos conocidos (regresión del motor de atribución) — ALCANCE
+
+Objetivo: que los eventos que ya se marcan con 🐞 en el modo debug dejen de perderse al cerrar la
+pestaña, y sirvan de red de seguridad cuando se toque `resolveSource`/`parseCombat` en el futuro —
+sin añadir superficie nueva de cara al día a día de jugar (esto es fontanería interna, no una
+función que tú vayáis a usar jugando).
+
+**Qué toca:**
+- El flujo de exportar 🐞 (además de descargar el JSON como ya hace, sin quitarlo).
+- Guardado persistente vía `window.storage` (mismo patrón que el historial: `hasStorage()`,
+  cachear, fallback sin storage).
+- Un botón nuevo, discreto, dentro del propio modo debug: "Validar casos conocidos".
+
+**Qué NO toca (para no crecer el proyecto de más):**
+- No añade ninguna tarjeta/sección nueva en la pantalla principal.
+- No añade UI para editar o borrar casos uno a uno a mano (si hace falta más adelante, se añade
+  entonces).
+- No modifica `parseCombat` ni `resolveSource` — solo lee `debugEvents` ya calculados.
+- No inventa un campo de "respuesta correcta" estructurado: la nota que ya se escribe al marcar
+  con 🐞 sigue siendo texto libre; "validar" compara la atribución de entonces contra la de ahora
+  para la misma línea exacta de log, y deja que la persona juzgue si el cambio es una mejora.
+
+**Milestones:**
+1. Guardado persistente de los casos marcados (sin UI nueva visible aparte del propio flujo de
+   exportar, que ahora también guarda).
+2. Botón "Validar casos conocidos": para el combate cargado ahora mismo, busca qué casos
+   guardados coinciden por línea exacta y avisa si la atribución cambió desde que se marcaron.
+3. Exportar/importar casos conocidos (igual que ya existe para el historial, para uso standalone
+   sin `window.storage`) y cerrar la documentación.
+
 ## Limitaciones conocidas (algunas deliberadas, no por desconocimiento)
 
 - **PA/PM/PW, resistencia y esquiva/placaje dados (en positivo) NO se trackean.** El texto del
