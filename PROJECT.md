@@ -74,6 +74,20 @@ Patrones confirmados dentro de `[Información (combate)]`:
 | Debuff PA/PM/PW | `X: -N (PA\|PM\|PW)` — **idéntico al gasto propio de recursos**; solo se cuenta si el objetivo ≠ lanzador actual |
 | Buffs/debuffs % | `X: [-]N% de (daños infligidos\|daños causados\|golpe crítico\|curas realizadas\|curas recibidas\|armadura recibida\|anticipación)`, con `(N turnos)` opcional |
 
+## Selector de sesión cuando el log tiene varias con las mismas palabras clave
+
+Antes, si un log tenía varias sesiones inicio/fin con las mismas palabras clave (típico de una
+noche con varios intentos al mismo jefe usando el mismo par de palabras cada vez), la app
+siempre calculaba la más reciente y solo avisaba en un texto de que había más — sin forma de
+verlas sin cambiar de palabras clave a mano.
+
+Ahora `detectSessions` empareja cada "fin" con el "inicio" más cercano anterior a él que no se
+haya usado ya en una sesión previa, devolviendo TODAS las sesiones del archivo en orden
+cronológico (no solo la última). El comportamiento por defecto no cambia — al pulsar "Calcular"
+se sigue mostrando automáticamente la sesión más reciente — pero si se detecta más de una,
+aparece debajo un selector con cada sesión (número de líneas + primera línea de log) y un botón
+"Calcular esta" para recalcular con cualquiera de las anteriores sin tocar las palabras clave.
+
 ## Motor de atribución (quién se lleva el mérito de cada evento)
 
 Regla base: se atribuye al **lanzador activo** (quien lanzó el último hechizo antes del evento).
@@ -193,6 +207,29 @@ grupo") todavía amalgama aliados y enemigos igual que antes de esta feature —
 ampliar el alcance. Si hace falta separarla también, sería una feature aparte reutilizando
 `splitByRole`/`subsetPlayers`.
 
+## Filtro por etiquetas en Análisis con IA y Vista de tendencia
+
+Las etiquetas (jefe/mazmorra/dificultad) existían desde que se guarda un combate, pero el
+Análisis con IA y la Vista de tendencia seguían comparando contra TODO el historial sin
+filtrar — comparar un intento a un jefe difícil contra la media de mazmorras fáciles de relleno
+daba consejos y gráficos menos útiles de lo que las etiquetas prometían. `filterHistoryByTags`
+(pura, reutilizada en ambas features) resuelve esto:
+
+- **Análisis con IA**: lee los campos Jefe/Mazmorra/Dificultad del propio formulario de
+  "Guardar en historial" tal cual estén rellenos en ese momento (no hace falta haber guardado
+  el combate todavía) y filtra la media histórica por ellos. El payload que recibe la IA incluye
+  `comparacion.modo`: `"filtrado"` si hubo coincidencias (la IA lo menciona explícitamente,
+  tipo "comparado con tus otros intentos a este jefe"), `"fallback_sin_coincidencias"` si se
+  pidió el filtro pero no había combates guardados con esas etiquetas (se avisa y se usa el
+  historial general en su lugar, nunca un resultado vacío), o `"sin_etiquetas"` si no se rellenó
+  ningún campo (comportamiento de siempre). Una línea de contexto sobre los consejos deja claro
+  cuál de los tres casos se aplicó. La caché en memoria de respuestas incluye las etiquetas en su
+  clave, para no servir un consejo obsoleto si se cambian las etiquetas y se vuelve a analizar.
+- **Vista de tendencia**: nuevo tercer selector con las combinaciones de etiquetas detectadas en
+  el historial guardado (`uniqueTagCombos`) + "Todos los combates" por defecto. Combates
+  guardados sin etiquetas simplemente no aparecen en ninguna combinación del selector y quedan
+  fuera si se filtra por una etiqueta concreta — no rompen nada, solo no cuentan para ese filtro.
+
 ## Modo debug que aprende (alcance deliberadamente limitado)
 
 Antes, cada bug marcado en el modo debug se exportaba a JSON y había que pasárselo a Claude para
@@ -296,6 +333,10 @@ wakfu-calc/
       la sesión, aviso si el archivo no parece un log de Wakfu, copiar tabla principal como texto
 - [x] Clasificación aliado/enemigo por combate (modal + `entry.roles`), Total del grupo dividido
       en Aliados/Enemigos en la comparativa, en vez de amalgamar ambos bandos
+- [x] Filtro por etiquetas (jefe/mazmorra/dificultad) en Análisis con IA y Vista de tendencia —
+      compara solo contra combates similares en vez de todo el historial mezclado
+- [x] Selector de sesión cuando el log tiene varias con las mismas palabras clave, en vez de
+      calcular siempre la más reciente en silencio
 
 ## Mejoras de calidad de vida (QoL) — carga de log, tablas, desplegables
 
