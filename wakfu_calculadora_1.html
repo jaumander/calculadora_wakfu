@@ -231,6 +231,7 @@
   <button class="primary" id="btnSubmit" disabled>Calcular</button>
   <button class="ghost" id="btnReset">Reiniciar</button>
   <div id="status"></div>
+  <div id="sessionPicker" style="display:none; margin-top:14px;"></div>
 </div>
 
 <div class="card" id="historyCard">
@@ -1254,6 +1255,66 @@ btnReset.addEventListener('click', () => {
   document.getElementById('endKw').value = 'fin calculadora';
 });
 
+// Detecta TODAS las sesiones inicio/fin de un log, no solo la última. Empareja cada "fin" con
+// el "inicio" más cercano anterior a él que todavía no se haya usado en una sesión previa —
+// así una racha de N combates seguidos con las mismas palabras clave da N sesiones en orden
+// cronológico, en vez de colapsarlas todas en una. Pura, sin DOM, fácil de probar con Node.
+function detectSessions(lines, startKw, endKw){
+  const startIdxAll = [];
+  const endIdxAll = [];
+  lines.forEach((l, i) => {
+    const low = l.toLowerCase();
+    if (low.includes(startKw)) startIdxAll.push(i);
+    if (low.includes(endKw)) endIdxAll.push(i);
+  });
+  const sessions = [];
+  let lastConsumedStart = -1;
+  for (const end of endIdxAll){
+    let candidate = -1;
+    for (let i = 0; i < startIdxAll.length; i++){
+      if (startIdxAll[i] >= end) break;
+      if (startIdxAll[i] > lastConsumedStart) candidate = startIdxAll[i];
+    }
+    if (candidate !== -1){
+      sessions.push({ startIdx: candidate, endIdx: end });
+      lastConsumedStart = candidate;
+    }
+  }
+  return sessions;
+}
+
+function computeAndRenderSession(lines, session, resolutions){
+  const slice = lines.slice(session.startIdx + 1, session.endIdx);
+  const { players, ambiguous, debugEvents } = parseCombat(slice, resolutions);
+  renderResults(players, ambiguous, debugEvents, lines[session.startIdx], lines[session.endIdx]);
+  return slice.length;
+}
+
+function renderSessionPicker(lines, sessions){
+  const picker = document.getElementById('sessionPicker');
+  if (!picker) return;
+  picker.style.display = 'block';
+  picker.innerHTML = `<div class="meta" style="margin-bottom:8px;">Se han detectado `
+    + `${sessions.length} sesiones con esas palabras clave — se ha calculado la más reciente `
+    + `arriba. Elige otra si quieres verla en su lugar:</div>`
+    + sessions.map((s, i) => {
+        const n = s.endIdx - s.startIdx - 1;
+        return `<div style="display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--line);">
+          <div style="flex:1; font-size:13px;">Sesión ${i + 1} de ${sessions.length} — ${n} líneas<br>
+            <span style="font-size:11px; color:var(--muted);">${escapeHtml(lines[s.startIdx])}</span></div>
+          <button class="ghost" style="padding:6px 12px;" data-session-idx="${i}">Calcular esta</button>
+        </div>`;
+      }).join('');
+  picker.querySelectorAll('[data-session-idx]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const idx = parseInt(btn.dataset.sessionIdx, 10);
+      const resolutions = await loadResolutions();
+      const n = computeAndRenderSession(lines, sessions[idx], resolutions);
+      status.textContent = `Analizadas ${n} líneas entre inicio y fin (sesión ${idx + 1} de ${sessions.length}).`;
+    });
+  });
+}
+
 btnSubmit.addEventListener('click', async () => {
   const startKwRaw = document.getElementById('startKw').value.trim();
   const endKwRaw = document.getElementById('endKw').value.trim();
@@ -1262,22 +1323,12 @@ btnSubmit.addEventListener('click', async () => {
   if (!rawText) return;
   saveKeywords(startKwRaw, endKwRaw);
   const lines = rawText.split(/\r?\n/);
+  const picker = document.getElementById('sessionPicker');
+  if (picker){ picker.style.display = 'none'; picker.innerHTML = ''; }
 
-  const startIdxAll = [];
-  const endIdxAll = [];
-  lines.forEach((l, i) => {
-    const low = l.toLowerCase();
-    if (low.includes(startKw)) startIdxAll.push(i);
-    if (low.includes(endKw)) endIdxAll.push(i);
-  });
+  const sessions = detectSessions(lines, startKw, endKw);
 
-  const endIdx = endIdxAll.length ? endIdxAll[endIdxAll.length - 1] : -1;
-  let startIdx = -1;
-  for (let i = startIdxAll.length - 1; i >= 0; i--){
-    if (startIdxAll[i] < endIdx){ startIdx = startIdxAll[i]; break; }
-  }
-
-  if (startIdx === -1 || endIdx === -1){
+  if (!sessions.length){
     status.textContent = looksLikeWakfuLog(rawText)
       ? 'No se encontraron ambas palabras clave en el archivo. Revisa el texto exacto.'
       : '⚠ No se encontraron las palabras clave, y este archivo no parece tener el formato de wakfu_chat.log esperado (línea con hora "HH:MM:SS,mmm - [Canal]"). Comprueba que sea el archivo correcto.';
@@ -1285,12 +1336,20 @@ btnSubmit.addEventListener('click', async () => {
     return;
   }
 
-  const slice = lines.slice(startIdx + 1, endIdx);
   const resolutions = await loadResolutions();
-  const { players, ambiguous, debugEvents } = parseCombat(slice, resolutions);
-  renderResults(players, ambiguous, debugEvents, lines[startIdx], lines[endIdx]);
-  const extra = startIdxAll.length > 1 ? ` (se detectaron ${startIdxAll.length} sesiones con esas palabras clave; se usó la más reciente)` : '';
-  status.textContent = `Analizadas ${slice.length} líneas entre inicio y fin.${extra}`;
+
+  if (sessions.length === 1){
+    const n = computeAndRenderSession(lines, sessions[0], resolutions);
+    status.textContent = `Analizadas ${n} líneas entre inicio y fin.`;
+    return;
+  }
+
+  // Varias sesiones: se calcula la más reciente igual que siempre (no cambia el comportamiento
+  // por defecto), pero ahora se deja un selector explícito para elegir cualquiera de las otras
+  // en vez de solo avisar de que existían sin poder hacer nada con ellas.
+  const n = computeAndRenderSession(lines, sessions[sessions.length - 1], resolutions);
+  status.textContent = `Analizadas ${n} líneas entre inicio y fin (sesión ${sessions.length} de ${sessions.length}, la más reciente).`;
+  renderSessionPicker(lines, sessions);
 });
 
 // resolutions: mapa persistente { nombreEstadoEnMinusculas: nombreJugador } con correcciones de
