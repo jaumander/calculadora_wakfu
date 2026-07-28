@@ -291,6 +291,9 @@ wakfu-calc/
 - [x] Ratios de eficiencia: daño medio por hechizo con efecto, y daño hecho ÷ recibido (en "Datos avanzados")
 - [x] Standalone fuera del panel de chat: BYOK (localStorage) para Análisis con IA, localStorage
       para correcciones aprendidas — ver "Principio de diseño" al principio del documento
+- [x] Mejoras QoL (carga de log, tablas, desplegables) — ver sección dedicada más arriba: recordar
+      palabras clave, copiar líneas de log, buscador de jugador, recordar desplegables abiertos en
+      la sesión, aviso si el archivo no parece un log de Wakfu, copiar tabla principal como texto
 - [x] Clasificación aliado/enemigo por combate (modal + `entry.roles`), Total del grupo dividido
       en Aliados/Enemigos en la comparativa, en vez de amalgamar ambos bandos
 

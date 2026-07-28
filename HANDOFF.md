@@ -6,12 +6,17 @@
 
 ## Estado: Nada en curso
 
-Última feature completada: clasificación aliado/enemigo por combate del historial (modal
-`openRoleModal` + `entry.roles`), con la comparativa dividiendo ya "Total del grupo" en
-Aliados/Enemigos en vez de amalgamar ambos. Documentado en PROJECT.md, sección "Clasificación
-aliado/enemigo". Milestones 1/3, 2/3 y 3/3 commiteados y pusheados. Nada roto, nada a medio
-probar. Limitación conocida y aceptada: la vista de tendencia sigue sin separar por bando (fuera
-de alcance a propósito, ver esa sección de PROJECT.md).
+Última feature completada: mejoras de calidad de vida (QoL) en carga de log, tablas y
+desplegables. Documentado en PROJECT.md, sección "Mejoras de calidad de vida (QoL)". Los 6
+milestones commiteados y pusheados:
+1/6 recordar palabras clave inicio/fin, 2/6 botón copiar en celdas con línea(s) de log,
+3/6 buscador de jugador, 4/6 recordar desplegables abiertos (solo en memoria de sesión),
+5/6 aviso si el archivo no parece un log de Wakfu, 6/6 copiar tabla principal como texto.
+Nada roto, nada a medio probar. No tocó `parseCombat` ni `resolveSource` (el usuario autorizó
+explícitamente saltarse la validación con log real para esta feature por no tocar el parser);
+cada milestone sí se comprobó con `node --check` sobre el `<script>` y pruebas de lógica aisladas
+con Node para las funciones puras nuevas (`looksLikeWakfuLog`, `buildMainTableText`, `copyBtn`,
+guardado/carga de palabras clave).
 
 ## Plantilla a rellenar cuando se deja algo a medias
 
