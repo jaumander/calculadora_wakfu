@@ -187,6 +187,24 @@
   @media (prefers-reduced-motion:reduce){
     *{ transition:none !important; animation:none !important; }
   }
+
+  /* --- click-to-filter en modo debug --- */
+  .clickable{ cursor:pointer; }
+  .clickable:hover{ text-decoration:underline; text-decoration-style:dotted; color:var(--accent); }
+  tr.clickable-row{ cursor:pointer; }
+  tr.clickable-row:hover td{ background:#22314f80; }
+  #pinBar:empty{ margin:0; }
+  #pinBar{ margin-bottom:10px; }
+  #pinBar .pinChip{
+    display:inline-flex; align-items:center; gap:8px; background:var(--panel2);
+    border:1px solid var(--accent); color:var(--accent); padding:5px 8px 5px 12px;
+    border-radius:14px; font-size:12px;
+  }
+  #pinBar .pinChip button{
+    background:transparent; border:none; color:var(--muted); cursor:pointer;
+    font-size:12px; padding:0; margin:0; text-transform:none; letter-spacing:0;
+  }
+  #pinBar .pinChip button:hover{ color:var(--dmg); }
 </style>
 </head>
 <body>
@@ -266,6 +284,7 @@ let historyCache = null;  // array de combates guardados, cacheado tras la prime
 // Qué desplegables del panel de resultados estaban abiertos, solo en memoria de esta pestaña
 // (no persiste al recargar la página) — se reaplica al recalcular otro combate en la misma sesión.
 let openPanels = { adv: false, mods: false, spells: false, debug: false };
+let currentPinClickHandler = null; // listener de clic-para-filtrar activo en #results (se sustituye en cada recálculo)
 
 // --- Copiar al portapapeles, con fallback para contextos sin navigator.clipboard ---
 async function copyToClipboard(text){
@@ -1625,22 +1644,23 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
     const dmgRatio = p.dmgReceived ? (p.dmgDone / p.dmgReceived) : (p.dmgDone > 0 ? null : 0);
     const dmgRatioDisplay = p.dmgReceived ? dmgRatio.toFixed(2) : (p.dmgDone > 0 ? '∞' : '—');
     const dmgRatioSort = p.dmgReceived ? dmgRatio : (p.dmgDone > 0 ? 999999 : -1);
+    const pn = escapeHtml(n);
     rows += `<tr>
       <td>${escapeHtml(n)}</td>
-      <td class="dmg" data-sort="${p.dmgDone}">${p.dmgDone.toLocaleString('es-ES')}</td>
-      <td class="dmg" data-sort="${p.dmgReceived}">${p.dmgReceived.toLocaleString('es-ES')}</td>
-      <td class="heal" data-sort="${p.healDone}">${p.healDone.toLocaleString('es-ES')}</td>
-      <td class="heal" data-sort="${p.healReceived}">${p.healReceived.toLocaleString('es-ES')}</td>
-      <td>${p.spellsCast}</td>
-      <td class="crit" data-sort="${critPct==='—'?-1:critPct}">${critPct}${critPct!=='—'?'%':''}</td>
-      <td${koFlag}${tt(koLinesWithWarning)}>${p.koCount}${copyBtn(koLinesWithWarning)}</td>
-      <td${tt(p.reviveLines)}>${p.revives}${copyBtn(p.reviveLines)}</td>
+      <td class="dmg clickable" data-pin-type="dmgDone" data-pin-player="${pn}" data-sort="${p.dmgDone}">${p.dmgDone.toLocaleString('es-ES')}</td>
+      <td class="dmg clickable" data-pin-type="dmgReceived" data-pin-player="${pn}" data-sort="${p.dmgReceived}">${p.dmgReceived.toLocaleString('es-ES')}</td>
+      <td class="heal clickable" data-pin-type="healDone" data-pin-player="${pn}" data-sort="${p.healDone}">${p.healDone.toLocaleString('es-ES')}</td>
+      <td class="heal clickable" data-pin-type="healReceived" data-pin-player="${pn}" data-sort="${p.healReceived}">${p.healReceived.toLocaleString('es-ES')}</td>
+      <td class="clickable" data-pin-type="spellsCast" data-pin-player="${pn}">${p.spellsCast}</td>
+      <td class="crit clickable" data-pin-type="critPct" data-pin-player="${pn}" data-sort="${critPct==='—'?-1:critPct}">${critPct}${critPct!=='—'?'%':''}</td>
+      <td class="clickable" data-pin-type="koCount" data-pin-player="${pn}"${koFlag}${tt(koLinesWithWarning)}>${p.koCount}${copyBtn(koLinesWithWarning)}</td>
+      <td class="clickable" data-pin-type="revives" data-pin-player="${pn}"${tt(p.reviveLines)}>${p.revives}${copyBtn(p.reviveLines)}</td>
     </tr>`;
     rows2 += `<tr>
       <td>${escapeHtml(n)}</td>
-      <td>${p.armorGiven.toLocaleString('es-ES')}</td>
-      <td>${p.armorReceived.toLocaleString('es-ES')}</td>
-      <td>${p.anticipatedHits}</td>
+      <td class="clickable" data-pin-type="armorGiven" data-pin-player="${pn}">${p.armorGiven.toLocaleString('es-ES')}</td>
+      <td class="clickable" data-pin-type="armorReceived" data-pin-player="${pn}">${p.armorReceived.toLocaleString('es-ES')}</td>
+      <td class="clickable" data-pin-type="anticipated" data-pin-player="${pn}">${p.anticipatedHits}</td>
       <td data-sort="${avgDmgPerSpell===null?-1:avgDmgPerSpell}">${avgDmgPerSpell===null?'—':avgDmgPerSpell.toLocaleString('es-ES')}</td>
       <td data-sort="${dmgRatioSort}">${dmgRatioDisplay}</td>
     </tr>`;
@@ -1651,7 +1671,7 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
       const avgTurns = m.turnsCount ? (m.turnsSum / m.turnsCount).toFixed(1) : '—';
       if (m.buffCount){
         const peak = Math.max(...(m.buffValues || [m.buffSum]));
-        modRows += `<tr data-cat="${escapeHtml(cat)}" data-tipo="Buff"${tt(m.buffLines)}>
+        modRows += `<tr class="clickable-row" data-cat="${escapeHtml(cat)}" data-tipo="Buff" data-pin-type="mod" data-pin-player="${pn}" data-pin-cat="${escapeHtml(cat)}" data-pin-tipo="Buff"${tt(m.buffLines)}>
           <td>${escapeHtml(n)}</td><td>${escapeHtml(cat)}</td><td class="heal">Buff</td>
           <td data-sort="${m.buffCount}">${m.buffCount}</td>
           <td class="total-cell" data-sum="${m.buffSum.toFixed(0)}" data-peak="${peak.toFixed(0)}" data-unit="${unit}" data-sort="${m.buffSum}">${m.buffSum.toFixed(0)}${unit}</td>
@@ -1659,7 +1679,7 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
       }
       if (m.debuffCount){
         const peak = Math.max(...(m.debuffValues || [m.debuffSum]));
-        modRows += `<tr data-cat="${escapeHtml(cat)}" data-tipo="Debuff"${tt(m.debuffLines)}>
+        modRows += `<tr class="clickable-row" data-cat="${escapeHtml(cat)}" data-tipo="Debuff" data-pin-type="mod" data-pin-player="${pn}" data-pin-cat="${escapeHtml(cat)}" data-pin-tipo="Debuff"${tt(m.debuffLines)}>
           <td>${escapeHtml(n)}</td><td>${escapeHtml(cat)}</td><td class="dmg">Debuff</td>
           <td data-sort="${m.debuffCount}">${m.debuffCount}</td>
           <td class="total-cell" data-sum="${m.debuffSum.toFixed(0)}" data-peak="${peak.toFixed(0)}" data-unit="${unit}" data-sort="${m.debuffSum}">${m.debuffSum.toFixed(0)}${unit}</td>
@@ -1680,6 +1700,7 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
   let spellSections = '';
   for (const n of names){
     const p = players[n];
+    const pn = escapeHtml(n);
     const spellNames = Object.keys(p.spells);
     if (!spellNames.length) continue;
     let spellRows = '';
@@ -1687,11 +1708,13 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
       const sp = p.spells[sn];
       const dom = dominantElement(sp.elements);
       const dotColor = dom && elColor[dom] ? elColor[dom] : 'var(--muted)';
+      const sn_ = escapeHtml(sn);
       spellRows += `<tr${tt(sp.lines)}>
         <td><span class="dot" style="background:${dotColor}"></span>${escapeHtml(sn)}</td>
-        <td data-sort="${sp.count}">${sp.count}</td><td data-sort="${sp.crits}">${sp.crits}</td>
-        <td class="dmg" data-sort="${sp.dmgTotal}">${sp.dmgTotal ? sp.dmgTotal.toLocaleString('es-ES') : '—'}</td>
-        <td class="heal" data-sort="${sp.healTotal}">${sp.healTotal ? sp.healTotal.toLocaleString('es-ES') : '—'}${copyBtn(sp.lines)}</td>
+        <td class="clickable" data-pin-type="spellHits" data-pin-player="${pn}" data-pin-cat="${sn_}" data-sort="${sp.count}">${sp.count}</td>
+        <td class="clickable" data-pin-type="spellCrits" data-pin-player="${pn}" data-pin-cat="${sn_}" data-sort="${sp.crits}">${sp.crits}</td>
+        <td class="dmg clickable" data-pin-type="spellDmg" data-pin-player="${pn}" data-pin-cat="${sn_}" data-sort="${sp.dmgTotal}">${sp.dmgTotal ? sp.dmgTotal.toLocaleString('es-ES') : '—'}</td>
+        <td class="heal clickable" data-pin-type="spellHeal" data-pin-player="${pn}" data-pin-cat="${sn_}" data-sort="${sp.healTotal}">${sp.healTotal ? sp.healTotal.toLocaleString('es-ES') : '—'}${copyBtn(sp.lines)}</td>
       </tr>`;
     }
     spellSections += `<div class="spellPlayerBlock" data-player="${escapeHtml(n.toLowerCase())}">
@@ -1765,6 +1788,7 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
       <div class="meta" style="margin-bottom:10px;">La columna "Aprender" solo aparece cuando el evento viene de un estado/aura con nombre
         reconocido entre paréntesis. Confirmar ahí guarda quién debería llevarse siempre el mérito de ese
         nombre de estado — no cambia nada más de la app.</div>
+      <div id="pinBar"></div>
       <div class="filters">
         <select id="debugFilterCat"><option value="">Todas las categorías</option></select>
         <input type="text" id="debugSearch" placeholder="Buscar jugador o texto…">
@@ -1932,15 +1956,19 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
   });
 
   let onlyFlagged = false;
+  let pinnedFilter = null; // { desc, pred(ev) } — filtro exacto activado al clicar un dato concreto de otra tabla
   function applyDebugFilters(){
     const cat = debugCatSelect.value;
     const q = document.getElementById('debugSearch').value.trim().toLowerCase();
     document.querySelectorAll('#debugTable tbody tr').forEach(r => {
-      const matchCat = !cat || r.dataset.cat === cat;
-      const matchQ = !q || r.textContent.toLowerCase().includes(q);
+      const idx = parseInt(r.dataset.idx, 10);
+      const ev = debugEvents[idx];
+      const matchMain = pinnedFilter
+        ? pinnedFilter.pred(ev)
+        : ((!cat || r.dataset.cat === cat) && (!q || r.textContent.toLowerCase().includes(q)));
       const cb = r.querySelector('.bugCheck');
       const matchFlag = !onlyFlagged || (cb && cb.checked);
-      r.style.display = (matchCat && matchQ && matchFlag) ? '' : 'none';
+      r.style.display = (matchMain && matchFlag) ? '' : 'none';
     });
   }
   debugCatSelect.addEventListener('change', applyDebugFilters);
@@ -1950,6 +1978,72 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine){
     this.classList.toggle('on', onlyFlagged);
     applyDebugFilters();
   });
+
+  function renderPinBar(){
+    const bar = document.getElementById('pinBar');
+    if (!pinnedFilter){ bar.innerHTML = ''; return; }
+    bar.innerHTML = `<span class="pinChip">Filtrando: <b>${escapeHtml(pinnedFilter.desc)}</b> <button id="clearPin" title="Quitar filtro">Quitar ✕</button></span>`;
+    document.getElementById('clearPin').addEventListener('click', () => {
+      pinnedFilter = null;
+      debugCatSelect.disabled = false;
+      document.getElementById('debugSearch').disabled = false;
+      renderPinBar();
+      applyDebugFilters();
+    });
+  }
+
+  // Traduce un clic en un dato concreto de cualquier tabla a un predicado exacto sobre debugEvents.
+  // No toca parseCombat: reutiliza los campos que YA guarda cada evento (categoría/objetivo/atribuido/línea)
+  // y, para hechizos concretos, las líneas exactas que ya guarda cada p.spells[nombre].lines.
+  function buildFilterForPin(type, player, cat, tipo){
+    const linesFor = (pl, sp) => (players[pl] && players[pl].spells[sp]) ? new Set(players[pl].spells[sp].lines) : new Set();
+    switch(type){
+      case 'dmgDone': return { desc:`Daño hecho — ${player}`, pred: ev => ev.category==='daño' && ev.source===player };
+      case 'dmgReceived': return { desc:`Daño recibido — ${player}`, pred: ev => ev.category==='daño' && ev.target===player };
+      case 'healDone': return { desc:`Curación hecha — ${player}`, pred: ev => ev.category==='curación' && ev.source===player };
+      case 'healReceived': return { desc:`Curación recibida — ${player}`, pred: ev => ev.category==='curación' && ev.target===player };
+      case 'spellsCast': return { desc:`Hechizos lanzados — ${player}`, pred: ev => ev.category==='lanzamiento' && ev.source===player };
+      case 'critPct': return { desc:`Lanzamientos críticos — ${player}`, pred: ev => ev.category==='lanzamiento' && ev.source===player && ev.line.includes('(Crítico)') };
+      case 'koCount': return { desc:`Derribos — ${player}`, pred: ev => ev.category==='derribo' && ev.target===player };
+      case 'revives': return { desc:`Resurrecciones hechas — ${player}`, pred: ev => ev.category==='resurrección' && ev.source===player };
+      case 'armorGiven': return { desc:`Armadura dada — ${player}`, pred: ev => ev.category==='armadura' && ev.source===player };
+      case 'armorReceived': return { desc:`Armadura recibida — ${player}`, pred: ev => ev.category==='armadura' && ev.target===player };
+      case 'anticipated': return { desc:`Golpes anticipados — ${player}`, pred: ev => ev.category==='daño' && ev.target===player && ev.line.includes('¡Anticipación!') };
+      case 'mod': {
+        const fullCat = `${cat} (${tipo === 'Buff' ? 'buff' : 'debuff'})`;
+        return { desc:`${cat} · ${tipo} — ${player}`, pred: ev => ev.category===fullCat && ev.source===player };
+      }
+      case 'spellHits': { const set = linesFor(player, cat); return { desc:`Golpes de "${cat}" — ${player}`, pred: ev => (ev.category==='daño'||ev.category==='curación') && set.has(ev.line) }; }
+      case 'spellDmg': { const set = linesFor(player, cat); return { desc:`Daño de "${cat}" — ${player}`, pred: ev => ev.category==='daño' && set.has(ev.line) }; }
+      case 'spellHeal': { const set = linesFor(player, cat); return { desc:`Curación de "${cat}" — ${player}`, pred: ev => ev.category==='curación' && set.has(ev.line) }; }
+      case 'spellCrits': return { desc:`Lanzamientos críticos de "${cat}" — ${player}`, pred: ev => ev.category==='lanzamiento' && ev.source===player && ev.line.includes(cat) && ev.line.includes('(Crítico)') };
+      default: return null;
+    }
+  }
+
+  // Un solo listener de clic vivo a la vez sobre #results (delegado), aunque se recalculen varios combates seguidos.
+  if (currentPinClickHandler) results.removeEventListener('click', currentPinClickHandler);
+  currentPinClickHandler = function(e){
+    const el = e.target.closest('[data-pin-type]');
+    if (!el) return;
+    const f = buildFilterForPin(el.dataset.pinType, el.dataset.pinPlayer, el.dataset.pinCat || '', el.dataset.pinTipo || '');
+    if (!f) return;
+    pinnedFilter = f;
+    const w = document.getElementById('debugWrap');
+    if (w.style.display === 'none'){
+      w.style.display = 'block';
+      document.getElementById('toggleDebug').textContent = '▾ Modo debug (cada mensaje del chat, a quién se atribuyó y por qué)';
+    }
+    openPanels.debug = true;
+    debugCatSelect.value = '';
+    debugCatSelect.disabled = true;
+    document.getElementById('debugSearch').value = '';
+    document.getElementById('debugSearch').disabled = true;
+    renderPinBar();
+    applyDebugFilters();
+    if (typeof w.scrollIntoView === 'function') w.scrollIntoView({ behavior:'smooth', block:'start' });
+  };
+  results.addEventListener('click', currentPinClickHandler);
 
   document.querySelectorAll('.bugCheck').forEach(cb => {
     cb.addEventListener('change', function(){
