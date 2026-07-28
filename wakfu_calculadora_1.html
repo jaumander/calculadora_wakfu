@@ -1114,13 +1114,25 @@ results.addEventListener('click', async (e) => {
   setTimeout(() => { btn.textContent = original; }, 1200);
 });
 
+// Comprueba si el texto tiene al menos una línea con el formato base de línea del log de Wakfu
+// (HH:MM:SS,mmm - [Canal] ...). Función pura, sin DOM, para poder probarla con Node.
+// Solo mira las primeras 300 líneas por rendimiento en archivos muy grandes.
+const WAKFU_LOG_LINE_RE = /^\d{2}:\d{2}:\d{2},\d{3}\s*-\s*\[/;
+function looksLikeWakfuLog(text){
+  if (!text) return false;
+  const sample = text.split(/\r?\n/).slice(0, 300);
+  return sample.some(l => WAKFU_LOG_LINE_RE.test(l));
+}
+
 function loadFile(file){
   const reader = new FileReader();
   reader.onload = () => {
     rawText = reader.result;
     fname.textContent = file.name + ' — ' + (file.size/1024).toFixed(0) + ' KB';
     btnSubmit.disabled = false;
-    status.textContent = '';
+    status.textContent = looksLikeWakfuLog(rawText)
+      ? ''
+      : '⚠ Este archivo no parece tener el formato de wakfu_chat.log (línea con hora "HH:MM:SS,mmm - [Canal]"). Puedes intentar calcular igualmente, pero revisa que sea el archivo correcto.';
   };
   reader.readAsText(file, 'utf-8');
 }
@@ -1156,7 +1168,9 @@ btnSubmit.addEventListener('click', async () => {
   }
 
   if (startIdx === -1 || endIdx === -1){
-    status.textContent = 'No se encontraron ambas palabras clave en el archivo. Revisa el texto exacto.';
+    status.textContent = looksLikeWakfuLog(rawText)
+      ? 'No se encontraron ambas palabras clave en el archivo. Revisa el texto exacto.'
+      : '⚠ No se encontraron las palabras clave, y este archivo no parece tener el formato de wakfu_chat.log esperado (línea con hora "HH:MM:SS,mmm - [Canal]"). Comprueba que sea el archivo correcto.';
     results.innerHTML = '';
     return;
   }
