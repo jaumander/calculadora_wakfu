@@ -2213,7 +2213,7 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine, rawL
       const idx = parseInt(r.dataset.idx, 10);
       const ev = debugEvents[idx];
       const matchMain = pinnedFilter
-        ? pinnedFilter.pred(ev)
+        ? (pinnedFilter.pred(ev) || (pinnedFilter.includeCasts && pinnedFilter.castsPlayer && ev.category === 'lanzamiento' && ev.source === pinnedFilter.castsPlayer))
         : ((!cat || r.dataset.cat === cat) && (!q || r.textContent.toLowerCase().includes(q)));
       const cb = r.querySelector('.bugCheck');
       const matchFlag = !onlyFlagged || (cb && cb.checked);
@@ -2231,12 +2231,23 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine, rawL
   function renderPinBar(){
     const bar = document.getElementById('pinBar');
     if (!pinnedFilter){ bar.innerHTML = ''; return; }
-    bar.innerHTML = `<span class="pinChip">Filtrando: <b>${escapeHtml(pinnedFilter.desc)}</b> <button id="clearPin" title="Quitar filtro">Quitar ✕</button></span>`;
+    const castsToggle = pinnedFilter.castsPlayer
+      ? ` <label style="margin-left:10px; font-size:12px; color:var(--muted); cursor:pointer;">
+          <input type="checkbox" id="pinIncludeCasts"${pinnedFilter.includeCasts ? ' checked' : ''}>
+          incluir lanzamientos de ${escapeHtml(pinnedFilter.castsPlayer)} (para verificar a quién se atribuyó como lanzador)
+        </label>`
+      : '';
+    bar.innerHTML = `<span class="pinChip">Filtrando: <b>${escapeHtml(pinnedFilter.desc)}</b> <button id="clearPin" title="Quitar filtro">Quitar ✕</button>${castsToggle}</span>`;
     document.getElementById('clearPin').addEventListener('click', () => {
       pinnedFilter = null;
       debugCatSelect.disabled = false;
       document.getElementById('debugSearch').disabled = false;
       renderPinBar();
+      applyDebugFilters();
+    });
+    const castsCb = document.getElementById('pinIncludeCasts');
+    if (castsCb) castsCb.addEventListener('change', function(){
+      pinnedFilter.includeCasts = this.checked;
       applyDebugFilters();
     });
   }
@@ -2247,9 +2258,9 @@ function renderResults(players, ambiguous, debugEvents, startLine, endLine, rawL
   function buildFilterForPin(type, player, cat, tipo){
     const linesFor = (pl, sp) => (players[pl] && players[pl].spells[sp]) ? new Set(players[pl].spells[sp].lines) : new Set();
     switch(type){
-      case 'dmgDone': return { desc:`Daño hecho — ${player}`, pred: ev => ev.category==='daño' && ev.source===player };
+      case 'dmgDone': return { desc:`Daño hecho — ${player}`, pred: ev => ev.category==='daño' && ev.source===player, castsPlayer: player };
       case 'dmgReceived': return { desc:`Daño recibido — ${player}`, pred: ev => ev.category==='daño' && ev.target===player };
-      case 'healDone': return { desc:`Curación hecha — ${player}`, pred: ev => ev.category==='curación' && ev.source===player };
+      case 'healDone': return { desc:`Curación hecha — ${player}`, pred: ev => ev.category==='curación' && ev.source===player, castsPlayer: player };
       case 'healReceived': return { desc:`Curación recibida — ${player}`, pred: ev => ev.category==='curación' && ev.target===player };
       case 'spellsCast': return { desc:`Hechizos lanzados — ${player}`, pred: ev => ev.category==='lanzamiento' && ev.source===player };
       case 'critPct': return { desc:`Lanzamientos críticos — ${player}`, pred: ev => ev.category==='lanzamiento' && ev.source===player && ev.line.includes('(Crítico)') };

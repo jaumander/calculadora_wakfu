@@ -284,6 +284,14 @@ eventos que forman ese dato exacto, con un chip "Filtrando: …" y botón para q
 - Se probó con `jsdom` simulando clics reales (no solo revisando el código): daño/curación hecho
   y recibido, armadura dada, un hechizo concreto con robo de vida, una fila de mods, y que un
   recálculo con un combate distinto no deja "colgado" el filtro del combate anterior.
+- **Daño hecho / Curación hecha** llevan además una casilla "incluir lanzamientos de
+  &lt;jugador&gt;" en el propio chip del filtro: al marcarla, se añaden también las líneas de
+  categoría `lanzamiento` de ese jugador (aunque no formen parte del predicado exacto del dato),
+  para poder cotejar de un vistazo si el hechizo lanzado justo antes de cada golpe encaja con a
+  quién se le atribuyó ese daño/curación — pensado para el caso "¿asignó bien el lanzador de
+  este daño?". Probado con `jsdom`: marcar la casilla añade las filas de lanzamiento sin tocar
+  las demás, desmarcarla las vuelve a ocultar, y la casilla no aparece en absoluto en métricas
+  sin este sentido (daño/curación *recibida*, derribos, armadura, etc.).
 
 ## Casos conocidos (regresión del motor de atribución) — ALCANCE
 
