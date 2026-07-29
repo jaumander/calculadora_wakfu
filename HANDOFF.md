@@ -4,20 +4,38 @@
 > parte de PROJECT.md con normalidad. Si NO está vacío, hay trabajo a medias — lee esto
 > ANTES de tocar código, para no reimplementar o pisar algo ya empezado.
 
-## Estado: Nada en curso
+## Estado: En curso — BLOQUEADA esperando un archivo
 
-Última feature completada (por otra sesión en paralelo — verificado contra el código real, ya
-que este archivo se había quedado desactualizado tras esa sesión): Sesiones de mazmorra —
-agrupar combates del historial en sesiones con total agregado, mejor/peor combate y
-export/import. Los 4 milestones están en el código (`loadSessions`/`saveSessionsList`, tarjeta
-"Sesiones de mazmorra", `btnExportSessions`/`btnImportSessions`) aunque el HANDOFF nunca se
-actualizó pasado el milestone 1 — corregido aquí tras comprobarlo directamente en
-`wakfu_calculadora_1.html`, no solo confiando en los mensajes de commit.
+**Feature/tarea:** excepción de atribución para la autocuración indirecta de "Pulgas" (Laik).
+Ver PROJECT.md, sección "Excepción de atribución: autocuración indirecta de 'Pulgas'".
 
-De paso: la feature que esta sesión iba a empezar ("clic en un dato → modo debug filtrado")
-resultó estar ya implementada por otra sesión en paralelo (mecanismo `pinnedFilter`, chip
-"Filtrando: … Quitar ✕", cubre casi todas las tablas). Ver PROJECT.md, sección "Modo debug →
-Click-to-filter". No se ha duplicado ese trabajo.
+**Objetivo:** cuando un jugador "lleva pulgas" (debuff aplicado por Laik) y recibe una curación
+pasiva sin nombre de efecto al terminar su turno, esa curación debería atribuirse a Laik (quien
+aplicó Pulgas), no al lanzador activo del motor actual.
+
+**Hecho hasta ahora:** investigación completa contra un log real de OTRA conversación (ya no
+adjunto aquí): se descartó la petición original tal cual (atribuir toda cura luz/fuego a Laik
+habría robado curaciones legítimas a otros 7 jugadores), se confirmó con el usuario que el caso
+real es más concreto (proc de Pulgas), y se aislaron 67 líneas candidatas — pero con una duda sin
+resolver (ver PROJECT.md) que necesita el log real para separar curaciones directas legítimas de
+procs de Pulgas. Nada de código tocado todavía, nada commiteado en `wakfu_calculadora_1.html`.
+
+**Falta por hacer:** pedirle a quien retome esto (o a la persona) que adjunte `wakfu_chat.log`
+(o un log real equivalente con Pulgas) en la conversación, confirmar el formato exacto de la
+línea de aplicación de Pulgas, resolver la duda de curación-directa-vs-proc línea a línea contra
+ese log, diseñar e implementar la excepción puntual en `parseCombat`, y validarla con Node antes
+de entregar.
+
+**Dónde tocar:** `wakfu_calculadora_1.html` — `parseCombat`, rama `pdvRe` con signo `+`
+(curación), y el sistema de `stateOwners`/`resolveSource` como referencia de patrón a reutilizar
+(no reutilizar literalmente, la curación directa no pasa por ahí hoy).
+
+**Cualquier cosa rota/a medio probar ahora mismo:** nada roto — no se ha tocado código todavía,
+precisamente para no adivinar el regex de Pulgas sin el log real.
+
+**Log de prueba usado:** ninguno disponible en esta conversación. Se usó `wakfu_chat.log` en una
+conversación anterior (grep pegado en el chat), pero el archivo en sí no está adjunto aquí —
+hace falta volver a subirlo para continuar.
 
 ## Plantilla a rellenar cuando se deja algo a medias
 

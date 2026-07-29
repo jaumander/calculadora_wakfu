@@ -110,6 +110,64 @@ buffs/debuffs %. El daño/curación directos NO pasan por este sistema — usan 
 de lanzador activo, que es fiable porque son el resultado directo de una acción, no un efecto
 retardado de zona.
 
+## Excepción de atribución: autocuración indirecta de "Pulgas" (en curso — BLOQUEADA, ver ALCANCE)
+
+**Petición original:** "toda curación etiquetada (luz)/(fuego) se atribuye a Laik si está en el
+combate". Investigación contra un log real (ya no adjunto en esta conversación, hace falta que
+se vuelva a subir) descartó esa regla tal cual: de 104 curaciones con esas etiquetas, solo 25 son
+de Laik — las otras 79 son de Hidori, Ledgem, Androido, Hikku, Ofrizz, Torreta y Cunejo,
+curaciones legítimas de sus propios hechizos. Implementar la regla literal les habría robado casi
+8 de cada 10 curaciones a esos 7 jugadores.
+
+**Aclaración del usuario que reabre el caso:** ese "robo" es correcto para un subconjunto
+concreto — una curación indirecta que ocurre al terminar el turno de un jugador que "lleva
+pulgas" (un estado/debuff), pero las pulgas se las puso Laik, así que esa curación puntual sí
+debería atribuirse a Laik aunque el objetivo (y el "lanzador activo" del motor actual) sea otro.
+
+**Evidencia ya reunida (grep contra el log real de esa sesión, no re-verificada todavía en
+ESTA conversación):**
+- El estado "Pulgas" no usa el formato `(Niv. N)` que ya reconoce `stateLevelRe` — usa
+  incrementos tipo `+31 niv.`, `+62 niv.`, etc. que se van sumando. Formato exacto de esa línea
+  **todavía sin confirmar** — hace falta el log real para escribir el regex correcto.
+- Curaciones con SOLO etiqueta de elemento entre paréntesis, sin ningún nombre de efecto detrás
+  (ej. `X: +1 PdV (fuego)`): 67 líneas — 20 Laik, 11 Ledgem, 9 Ofrizz, 9 Hikku, 8 Hidori,
+  7 Androido, 3 Torreta.
+- Curaciones con luz/fuego que SÍ llevan un nombre de efecto explícito detrás (ej. "Propagador -
+  Médico sin Barreras", "Marca del Reintegro"): 53 líneas — reparto similar entre jugadores.
+  Estas SÍ parecen curaciones directas de hechizos reales de cada jugador, no procs de Pulgas.
+
+**Duda sin resolver — por qué está bloqueada, no lista para implementar:** las curaciones
+directas de un hechizo lanzado (ej. "Laik lanza el hechizo Poción... → Objetivo: +1500 PdV
+(agua)") tampoco llevan nombre de efecto en la línea de PdV — el nombre de efecto entre
+paréntesis solo aparece en procs/auras retardadas, no en el golpe directo de un hechizo. Así que
+el grupo de "67 curas solo elemento" probablemente MEZCLA dos cosas distintas: curaciones directas
+legítimas de hechizos de cada jugador (donde el lanzador activo ya es correcto) y procs pasivos
+de Pulgas al terminar el turno (donde debería ser Laik). Separarlas a ciegas por "tiene o no
+nombre de efecto" sería el mismo tipo de suposición sin verificar que ya causó el primer error de
+esta conversación — hace falta el log real para comprobar, línea a línea, cuáles de esas 67
+tienen un "X lanza el hechizo Y" del propio objetivo justo antes (→ curación directa, no tocar) y
+cuáles no (→ candidata a proc de Pulgas).
+
+### ALCANCE (pendiente de confirmar el diseño final tras ver el log)
+
+**Toca (si se confirma):** nuevo regex para detectar la aplicación/stack de "Pulgas"; una
+variante del sistema de "dueño" de `resolveSource` para registrar quién aplicó Pulgas a quién;
+la rama de curación directa de `parseCombat` (hoy NO pasa por `resolveSource`, ver "Motor de
+atribución" arriba) — ganaría una excepción puntual: si el objetivo lleva Pulgas activo Y la
+línea de curación no tiene nombre de efecto Y no hay un lanzamiento propio del objetivo
+inmediatamente antes, se atribuye al dueño de Pulgas en vez de al lanzador activo.
+
+**NO toca:** las 53 curaciones con nombre de efecto explícito (siguen con la heurística de
+lanzador activo de siempre); ningún otro estado/debuff que no sea Pulgas; el resto de
+`resolveSource` (armadura, resistencia, PA/PM/PW, buffs/debuffs %).
+
+**Bloqueada en:** falta volver a adjuntar `wakfu_chat.log` (u otro log real con Pulgas) en la
+conversación para: (1) confirmar el formato exacto de la línea de aplicación de Pulgas, (2)
+comprobar línea a línea cuáles de las 67 curaciones "solo elemento" tienen un lanzamiento propio
+del objetivo justo antes (curación directa, no tocar) y cuáles no (candidata real a Pulgas), y
+(3) validar la implementación final con Node contra ese log antes de entregarla, como exige la
+metodología del proyecto.
+
 ## Historial persistente y comparativa entre combates
 
 Cada vez que se calcula un combate, aparece un bloque "Guardar este combate en el historial"
