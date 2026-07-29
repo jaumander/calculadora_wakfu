@@ -74,6 +74,20 @@ Patrones confirmados dentro de `[Información (combate)]`:
 | Debuff PA/PM/PW | `X: -N (PA\|PM\|PW)` — **idéntico al gasto propio de recursos**; solo se cuenta si el objetivo ≠ lanzador actual |
 | Buffs/debuffs % | `X: [-]N% de (daños infligidos\|daños causados\|golpe crítico\|curas realizadas\|curas recibidas\|armadura recibida\|anticipación)`, con `(N turnos)` opcional |
 
+## Selector de sesión cuando el log tiene varias con las mismas palabras clave
+
+Antes, si un log tenía varias sesiones inicio/fin con las mismas palabras clave (típico de una
+noche con varios intentos al mismo jefe usando el mismo par de palabras cada vez), la app
+siempre calculaba la más reciente y solo avisaba en un texto de que había más — sin forma de
+verlas sin cambiar de palabras clave a mano.
+
+Ahora `detectSessions` empareja cada "fin" con el "inicio" más cercano anterior a él que no se
+haya usado ya en una sesión previa, devolviendo TODAS las sesiones del archivo en orden
+cronológico (no solo la última). El comportamiento por defecto no cambia — al pulsar "Calcular"
+se sigue mostrando automáticamente la sesión más reciente — pero si se detecta más de una,
+aparece debajo un selector con cada sesión (número de líneas + primera línea de log) y un botón
+"Calcular esta" para recalcular con cualquiera de las anteriores sin tocar las palabras clave.
+
 ## Motor de atribución (quién se lleva el mérito de cada evento)
 
 Regla base: se atribuye al **lanzador activo** (quien lanzó el último hechizo antes del evento).
@@ -193,6 +207,29 @@ grupo") todavía amalgama aliados y enemigos igual que antes de esta feature —
 ampliar el alcance. Si hace falta separarla también, sería una feature aparte reutilizando
 `splitByRole`/`subsetPlayers`.
 
+## Filtro por etiquetas en Análisis con IA y Vista de tendencia
+
+Las etiquetas (jefe/mazmorra/dificultad) existían desde que se guarda un combate, pero el
+Análisis con IA y la Vista de tendencia seguían comparando contra TODO el historial sin
+filtrar — comparar un intento a un jefe difícil contra la media de mazmorras fáciles de relleno
+daba consejos y gráficos menos útiles de lo que las etiquetas prometían. `filterHistoryByTags`
+(pura, reutilizada en ambas features) resuelve esto:
+
+- **Análisis con IA**: lee los campos Jefe/Mazmorra/Dificultad del propio formulario de
+  "Guardar en historial" tal cual estén rellenos en ese momento (no hace falta haber guardado
+  el combate todavía) y filtra la media histórica por ellos. El payload que recibe la IA incluye
+  `comparacion.modo`: `"filtrado"` si hubo coincidencias (la IA lo menciona explícitamente,
+  tipo "comparado con tus otros intentos a este jefe"), `"fallback_sin_coincidencias"` si se
+  pidió el filtro pero no había combates guardados con esas etiquetas (se avisa y se usa el
+  historial general en su lugar, nunca un resultado vacío), o `"sin_etiquetas"` si no se rellenó
+  ningún campo (comportamiento de siempre). Una línea de contexto sobre los consejos deja claro
+  cuál de los tres casos se aplicó. La caché en memoria de respuestas incluye las etiquetas en su
+  clave, para no servir un consejo obsoleto si se cambian las etiquetas y se vuelve a analizar.
+- **Vista de tendencia**: nuevo tercer selector con las combinaciones de etiquetas detectadas en
+  el historial guardado (`uniqueTagCombos`) + "Todos los combates" por defecto. Combates
+  guardados sin etiquetas simplemente no aparecen en ninguna combinación del selector y quedan
+  fuera si se filtra por una etiqueta concreta — no rompen nada, solo no cuentan para ese filtro.
+
 ## Modo debug que aprende (alcance deliberadamente limitado)
 
 Antes, cada bug marcado en el modo debug se exportaba a JSON y había que pasárselo a Claude para
@@ -229,58 +266,54 @@ caja de texto para anotar el motivo. Botón "Exportar eventos marcados" descarga
 línea + categoría + atribución + razón del sistema + nota del usuario, pensado para pegárselo a
 Claude y depurar casos concretos juntos.
 
-## Clic en un dato → modo debug filtrado (en curso — ver ALCANCE)
+### Click-to-filter: de un dato concreto de cualquier tabla a sus líneas exactas en modo debug
 
-**Objetivo:** hoy el hover ya enseña las líneas de log detrás de un dato (derribos,
-resurrecciones, mods, hechizos), pero no las 4 columnas agregadas de la tabla principal (Daño
-hecho/recibido, Curación hecha/recibida) — y en ningún caso hay forma de saltar de un dato al
-Modo debug ya filtrado a esas líneas exactas. Se pide: clic en un dato → abre el Modo debug
-filtrado exactamente a los eventos que lo componen. Además, para el caso de daño/curación hechos,
-poder comparar esos eventos con los de lanzamiento (cast) atribuidos a ese mismo jugador, para
-verificar visualmente si la atribución de lanzador fue correcta.
+Con combates largos, buscar a mano en el modo debug qué líneas forman un número concreto (ej.
+"daño recibido por Ofrizz") era tedioso incluso con el filtro por categoría. Ahora casi todas las
+celdas de datos de las demás tablas (tabla principal, avanzada, mods, desglose por hechizo) son
+clicables: al pulsarlas, se abre el modo debug (si estaba cerrado) y se filtra **solo** a los
+eventos que forman ese dato exacto, con un chip "Filtrando: …" y botón para quitar el filtro.
 
-**Solución:**
-- Se añaden tooltips a las 4 columnas agregadas que hoy no lo tienen (Daño hecho/recibido,
-  Curación hecha/recibida), calculados filtrando `debugEvents` al vuelo (no hace falta tocar
-  `parseCombat` — `debugEvents` ya registra cada línea con su `category`/`source`/`target`).
-- Esas 4 columnas, más Derribos y Resurrecciones (que ya tenían tooltip), pasan a ser
-  clicables: el clic abre el Modo debug con los filtros ya puestos a los eventos exactos detrás
-  de ese número, y hace scroll hasta ahí.
-- El Modo debug gana dos selects nuevos junto al de categoría — "Objetivo" y "Atribuido a" — y
-  una casilla "+ incluir lanzamientos de 'Atribuido a'" que, marcada, añade también las líneas
-  de categoría `lanzamiento` de ese jugador aunque el filtro de categoría esté en otra cosa. Al
-  entrar desde Daño hecho/Curación hecha se marca automáticamente, para poder comparar de un
-  vistazo el momento de cada golpe con el hechizo que lo causó.
-- Mapeo dato → filtro: Daño hecho = categoría `daño` + Atribuido a = jugador. Daño recibido =
-  categoría `daño` + Objetivo = jugador. Curación hecha = categoría `curación` + Atribuido a =
-  jugador. Curación recibida = categoría `curación` + Objetivo = jugador. Derribos = categoría
-  `derribo` + Objetivo = jugador. Resurrecciones = categoría `resurrección` + Atribuido a =
-  jugador.
+- No toca `parseCombat`: reutiliza los campos que ya guarda cada evento (categoría/objetivo/
+  atribuido/línea) y, para hechizos concretos, las líneas exactas que ya guarda cada
+  `p.spells[nombre].lines` — por eso "Daño" de un hechizo con robo de vida excluye correctamente
+  las líneas de curación de ese mismo hechizo (y viceversa).
+- El filtro fijado (`pinnedFilter`) tiene prioridad sobre el desplegable de categoría y la
+  búsqueda de texto, que se deshabilitan mientras esté activo; se combina con el filtro de "solo
+  marcados 🐞" si también está encendido.
+- Se probó con `jsdom` simulando clics reales (no solo revisando el código): daño/curación hecho
+  y recibido, armadura dada, un hechizo concreto con robo de vida, una fila de mods, y que un
+  recálculo con un combate distinto no deja "colgado" el filtro del combate anterior.
 
-### ALCANCE
+## Casos conocidos (regresión del motor de atribución) — ALCANCE
 
-**Toca:** las 6 columnas agregadas de la tabla principal citadas arriba; el Modo debug (nuevos
-selects, checkbox, refactor de la lógica de filtrado a una función pura `debugRowMatches`
-testable con Node, sin cambiar el comportamiento de los filtros que ya existían — categoría,
-búsqueda de texto, solo marcados).
+Objetivo: que los eventos que ya se marcan con 🐞 en el modo debug dejen de perderse al cerrar la
+pestaña, y sirvan de red de seguridad cuando se toque `resolveSource`/`parseCombat` en el futuro —
+sin añadir superficie nueva de cara al día a día de jugar (esto es fontanería interna, no una
+función que tú vayáis a usar jugando).
 
-**NO toca:** `parseCombat`/`resolveSource` (no se cambia nada de cómo se calculan ni atribuyen
-los eventos, solo cómo se consultan después); el desglose por hechizo ni el de armadura/mods
-(ya tienen tooltip por hover, pero el clic-a-debug para esas tablas queda fuera de esta feature
-— posible ampliación futura, no se pierde nada al dejarlo así); historial/comparativa/modo
-debug que aprende (sin cambios).
+**Qué toca:**
+- El flujo de exportar 🐞 (además de descargar el JSON como ya hace, sin quitarlo).
+- Guardado persistente vía `window.storage` (mismo patrón que el historial: `hasStorage()`,
+  cachear, fallback sin storage).
+- Un botón nuevo, discreto, dentro del propio modo debug: "Validar casos conocidos".
+
+**Qué NO toca (para no crecer el proyecto de más):**
+- No añade ninguna tarjeta/sección nueva en la pantalla principal.
+- No añade UI para editar o borrar casos uno a uno a mano (si hace falta más adelante, se añade
+  entonces).
+- No modifica `parseCombat` ni `resolveSource` — solo lee `debugEvents` ya calculados.
+- No inventa un campo de "respuesta correcta" estructurado: la nota que ya se escribe al marcar
+  con 🐞 sigue siendo texto libre; "validar" compara la atribución de entonces contra la de ahora
+  para la misma línea exacta de log, y deja que la persona juzgue si el cambio es una mejora.
 
 **Milestones:**
-1. Lógica pura y testable: `eventsForMetric(debugEvents, category, {source, target})` y
-   `debugRowMatches(ev, filtros)`; atributos `data-source`/`data-target` en las filas de debug;
-   nuevos selects "Objetivo"/"Atribuido a" + checkbox en la toolbar, usando la función pura.
-   Validar con Node que el comportamiento de los filtros ya existentes (categoría, búsqueda,
-   solo marcados) no cambia.
-2. Tooltips que faltaban en las 4 columnas agregadas + clic-a-debug en las 6 columnas (función
-   `openDebugFiltered`, que abre la sección, pone los filtros y hace scroll) + estilo visual que
-   distinga qué celdas son clicables.
-3. Pulido: casilla "incluir lanzamientos" automática al entrar desde Daño/Curación hecha, cerrar
-   esta sección de PROJECT.md.
+1. Guardado persistente de los casos marcados (sin UI nueva visible aparte del propio flujo de
+   exportar, que ahora también guarda).
+2. Botón "Validar casos conocidos": para el combate cargado ahora mismo, busca qué casos
+   guardados coinciden por línea exacta y avisa si la atribución cambió desde que se marcaron.
+3. Exportar/importar casos conocidos (igual que ya existe para el historial, para uso standalone
+   sin `window.storage`) y cerrar la documentación.
 
 ## Limitaciones conocidas (algunas deliberadas, no por desconocimiento)
 
@@ -326,6 +359,8 @@ wakfu-calc/
 - [x] Tooltips con la línea de log original en cada fila (derribos, resurrecciones, mods, hechizos)
 - [x] Motor de atribución de efectos de zona/aura (dueño de estado) con detección de ambigüedad
 - [x] Modo debug: línea + razón de atribución por evento, flag de bug + nota, exportación a JSON
+- [x] Click-to-filter: clic en un dato concreto de cualquier tabla abre y filtra el modo debug
+      a solo los eventos que forman ese número exacto (ver sección dedicada más arriba)
 - [x] Historial persistente de combates (guardado con nombre, `window.storage` en el panel de
       chat, export/import `wakfu_historial.json` para uso como archivo suelto)
 - [x] Comparativa entre 2 combates guardados: totales del grupo y desglose por jugador con
@@ -333,7 +368,9 @@ wakfu-calc/
 - [x] Modo debug que aprende: correcciones de atribución (`{estado: jugador}`) confirmables desde
       la propia tabla de debug, guardadas en `window.storage`, aplicadas solas en próximos
       combates — alcance limitado a atribución, ver sección dedicada más arriba
-- [ ] Selector de idioma de la interfaz (ES/EN) — pendiente si se necesita
+- [x] Idioma de la interfaz: 100% español, por decisión de alcance (no un descuido). Se descartó
+      un selector ES/EN — no se quiere mantener ni testear varios idiomas. Si algún día hace falta
+      compartir la herramienta fuera de un grupo hispanohablante, se replantea entonces desde cero
 - [ ] Revisar eventos marcados como bug en el modo debug cuando el usuario los exporte
 - [x] Vista de tendencia (gráfico SVG, jugador/métrica seleccionables) cuando haya 3+
       combates guardados
@@ -344,8 +381,136 @@ wakfu-calc/
 - [x] Ratios de eficiencia: daño medio por hechizo con efecto, y daño hecho ÷ recibido (en "Datos avanzados")
 - [x] Standalone fuera del panel de chat: BYOK (localStorage) para Análisis con IA, localStorage
       para correcciones aprendidas — ver "Principio de diseño" al principio del documento
+- [x] Mejoras QoL (carga de log, tablas, desplegables) — ver sección dedicada más arriba: recordar
+      palabras clave, copiar líneas de log, buscador de jugador, recordar desplegables abiertos en
+      la sesión, aviso si el archivo no parece un log de Wakfu, copiar tabla principal como texto
+- [x] Casos conocidos (regresión del motor de atribución) — persistencia de eventos marcados con
+      🐞, botón "Validar casos conocidos" en el modo debug, export/import standalone. Ver sección
+      dedicada más arriba. Fontanería interna: sin tarjeta nueva en pantalla principal a propósito
+- [x] Copias de seguridad y memoria de roles — botón "Descargar copia de este log", líneas de log
+      originales guardadas en cada entrada nueva del historial (`entry.rawLines`), y clasificación
+      aliado/enemigo recordada por nombre entre sesiones (preselección en el modal, nunca
+      automática). Ver sección dedicada más arriba. Idioma: descartado el selector ES/EN, 100%
+      español por decisión de alcance
 - [x] Clasificación aliado/enemigo por combate (modal + `entry.roles`), Total del grupo dividido
       en Aliados/Enemigos en la comparativa, en vez de amalgamar ambos bandos
+- [x] Filtro por etiquetas (jefe/mazmorra/dificultad) en Análisis con IA y Vista de tendencia —
+      compara solo contra combates similares en vez de todo el historial mezclado
+- [x] Selector de sesión cuando el log tiene varias con las mismas palabras clave, en vez de
+      calcular siempre la más reciente en silencio
+
+## Mejoras de calidad de vida (QoL) — carga de log, tablas, desplegables
+
+**Alcance — qué toca:**
+- Zona de carga de archivo: recordar las palabras clave de inicio/fin entre sesiones, y avisar
+  de forma específica si el archivo cargado no tiene pinta de log de Wakfu (en vez del mensaje
+  genérico de "no se encontraron las palabras clave").
+- Tablas de resultados (principal, avanzada, hechizos, mods): botón de copiar en las celdas que
+  ya muestran línea(s) de log en el tooltip; buscador de jugador que filtra filas/bloques en esas
+  mismas tablas; botón "Copiar tabla como texto" en la tabla principal.
+- Desplegables del panel de resultados (avanzado/mods/hechizos/debug): recordar cuáles estaban
+  abiertos al recalcular otro combate, solo durante la sesión actual de la pestaña (variable en
+  memoria, no persistente entre recargas — así el riesgo de esta parte queda igual de bajo que
+  antes).
+
+**Qué NO toca (explícito para no poder romperlo por accidente):**
+- `parseCombat`, `resolveSource` ni ningún regex de parseo de eventos ya existente. Ninguna de
+  estas mejoras cambia cómo se interpretan las líneas del log, solo cómo se usan/muestran los
+  datos ya calculados.
+- Historial, comparativa, vista de tendencia, Análisis con IA, clasificación aliado/enemigo,
+  modo debug que aprende (`stateResolutions`) — nada de esa lógica se modifica.
+
+**Milestones:**
+1. Recordar palabras clave de inicio/fin (storage igual que `stateResolutions`: `window.storage`
+   dentro del panel, `localStorage` fuera).
+2. Botón copiar en celdas con tooltip de línea(s) de log (derribos, resurrecciones,
+   buffs/debuffs, hechizos).
+3. Buscador rápido de jugador (filtra tabla principal, avanzada, mods y bloques de hechizos).
+4. Recordar qué desplegables estaban abiertos entre cálculos, solo en memoria de la sesión.
+5. Aviso específico cuando el archivo cargado no tiene formato de log de Wakfu reconocible.
+6. Botón "Copiar tabla como texto" en la tabla principal.
+
+## Copias de seguridad y memoria de roles — ALCANCE
+
+**Motivo:** `wakfu_chat.log` no tiene fecha (solo hora `HH:MM:SS,mmm`) y no hay documentación
+oficial de Ankama sobre cuándo el cliente lo limpia o rota — se comprobó en un log real subido
+por el usuario que dentro de una sesión continua no se corta (solo hay un salto de medianoche,
+`23:59` → `00:00`, sin pérdida de líneas), pero no se puede descartar que se sobrescriba al
+reiniciar el cliente. Como no se puede verificar la regla exacta, la mitigación no depende de
+adivinarla: la propia app guarda su propia copia en el momento en que ya tiene los datos en la
+mano, en vez de vigilar el archivo real (que además ni siquiera puede — el navegador solo lee el
+archivo una vez, al soltarlo, no mantiene acceso continuo a él).
+
+**Qué toca:**
+- Zona de carga de archivo: botón para descargar una copia local del log tal cual se cargó
+  (backup manual con clic explícito, nunca descarga automática sin que el usuario la pida).
+- Guardado en historial: cada combate guardado incluye ahora las líneas de log originales del
+  rango usado (`entry.rawLines`), para poder reabrir el modo debug / validar casos conocidos de
+  un combate guardado sin depender de que `wakfu_chat.log` siga teniendo esas líneas. Entradas
+  antiguas del historial sin este campo se siguen mostrando igual, solo sin esa opción extra.
+- Modal de clasificación aliado/enemigo (`openRoleModal`): recuerda por nombre la última
+  clasificación usada (`window.storage`/`localStorage`, mismo patrón que el resto) y la
+  preselecciona la próxima vez que aparezca ese nombre — pero SIEMPRE pidiendo confirmación,
+  nunca se salta el modal ni se infiere el rol a partir de las estadísticas del combate (un jefe
+  puede pegar y curar igual que un aliado, así que no hay forma fiable de inferirlo solo).
+
+**Qué NO toca:**
+- `parseCombat` / `resolveSource`.
+- No intenta detectar ni gestionar la rotación real de `wakfu_chat.log` — es estructuralmente
+  imposible de vigilar desde el navegador (ver "Motivo" arriba); la copia de seguridad es
+  responsabilidad de la persona, la app solo se lo pone fácil con un botón.
+- No infiere el rol aliado/enemigo por daño/curación ni por ningún otro dato del combate — solo
+  recuerda clasificaciones manuales anteriores por nombre exacto.
+
+**Milestones:**
+1. Botón "Descargar copia de este log" en la zona de carga de archivo.
+2. Guardar las líneas de log originales del rango en cada entrada nueva del historial.
+3. Recordar la clasificación aliado/enemigo por nombre y preseleccionarla en el modal (siempre
+   pidiendo confirmación).
+4. Nota de alcance "solo español" en este documento, descartando el selector de idioma ES/EN que
+   estaba en la lista de pendientes.
+
+## Sesiones de mazmorra — ALCANCE
+
+**Motivo:** ahora mismo cada combate se guarda y analiza suelto. En la práctica, una mazmorra
+encadena varios combates seguidos (o varios intentos al mismo jefe), y no hay forma de ver el
+conjunto — solo combate a combate o comparando de dos en dos. El historial, las etiquetas, la
+comparativa y los roles aliado/enemigo ya existen; esta feature es una capa de agregación encima,
+sin tocar nada de cómo se calcula un combate individual.
+
+**Qué toca:**
+- Historial: las casillas de selección dejan de limitarse a 2. Con exactamente 2 marcadas se
+  sigue mostrando la comparativa de siempre (sin cambios ahí). Con 2 o más aparece además una
+  barra para agruparlas en una sesión nueva (campo de nombre + botón "Crear sesión").
+- Persistencia nueva `loadSessions()`/`saveSessionsList()`, mismo patrón que el historial:
+  `window.storage` en el panel, export/import JSON fuera de él. Una sesión es solo
+  `{ id, name, date, entryIds: [...] }` — una lista de IDs que apuntan a combates ya existentes
+  del historial, nunca una copia de sus datos.
+- Tarjeta nueva "Sesiones de mazmorra": por cada sesión guardada, total agregado (aliados y
+  enemigos por separado, reutilizando `combatTotals`/`splitByRole`/`subsetPlayers` ya existentes),
+  qué combate de la sesión fue el mejor/peor (criterio simple y explícito: menos derribos totales
+  de aliados, empate por daño hecho de aliados — nada de puntuaciones compuestas inventadas),
+  lista de combates que la componen, y borrar sesión (nunca borra los combates que contiene).
+
+**Qué NO toca:**
+- `parseCombat` / `resolveSource` / ninguna lógica de cálculo de un combate individual.
+- No copia datos de los combates dentro de la sesión — solo guarda sus IDs. Si se borra un
+  combate del historial, desaparece con gracia de cualquier sesión que lo tuviera (sin reventar,
+  sin dejar entradas fantasma en la UI).
+- La vista de tendencia actual (por jugador, entre combates sueltos) no se toca ni se le añade
+  agrupación por sesión en esta ronda — sigue funcionando exactamente igual que ahora. Se puede
+  plantear como ronda futura, pero queda fuera de este alcance.
+- El criterio de "mejor/peor combate" es deliberadamente simple (ver arriba) — no se inventa una
+  métrica ponderada ni un sistema de puntuación.
+
+**Milestones:**
+1. `loadSessions()`/`saveSessionsList()` + quitar el límite de 2 en las casillas del historial +
+   botón "Agrupar seleccionados en una sesión" (con nombre) cuando hay 2 o más marcadas.
+2. Tarjeta "Sesiones de mazmorra": listar sesiones, total agregado por sesión (aliados/enemigos),
+   combates que la componen, borrar sesión.
+3. Detectar el mejor/peor combate de la sesión con el criterio simple, y manejar con gracia los
+   IDs de combates que ya no existen en el historial.
+4. Export/import de sesiones (mismo patrón que historial/casos conocidos) para uso standalone.
 
 ## Trabajo multi-sesión / multi-cuenta
 

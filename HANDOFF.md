@@ -4,30 +4,20 @@
 > parte de PROJECT.md con normalidad. Si NO está vacío, hay trabajo a medias — lee esto
 > ANTES de tocar código, para no reimplementar o pisar algo ya empezado.
 
-## Estado: En curso
+## Estado: Nada en curso
 
-**Feature/tarea:** Clic en un dato (Daño hecho/recibido, Curación hecha/recibida, Derribos,
-Resurrecciones) → abre el Modo debug ya filtrado a los eventos exactos detrás de ese número, con
-opción de incluir también los lanzamientos (casts) de ese jugador para verificar la atribución.
+Última feature completada (por otra sesión en paralelo — verificado contra el código real, ya
+que este archivo se había quedado desactualizado tras esa sesión): Sesiones de mazmorra —
+agrupar combates del historial en sesiones con total agregado, mejor/peor combate y
+export/import. Los 4 milestones están en el código (`loadSessions`/`saveSessionsList`, tarjeta
+"Sesiones de mazmorra", `btnExportSessions`/`btnImportSessions`) aunque el HANDOFF nunca se
+actualizó pasado el milestone 1 — corregido aquí tras comprobarlo directamente en
+`wakfu_calculadora_1.html`, no solo confiando en los mensajes de commit.
 
-**Objetivo:** ver PROJECT.md, sección "Clic en un dato → modo debug filtrado (en curso — ver
-ALCANCE)", con el detalle completo.
-
-**Hecho hasta ahora:** nada commiteado todavía (acabo de escribir el alcance en PROJECT.md).
-
-**Falta por hacer (milestones, ver PROJECT.md):**
-1. `eventsForMetric`/`debugRowMatches` (funciones puras) + `data-source`/`data-target` en filas
-   de debug + selects "Objetivo"/"Atribuido a" + checkbox "incluir lanzamientos".
-2. Tooltips que faltan en las 4 columnas agregadas + clic-a-debug en las 6 columnas +
-   `openDebugFiltered` + estilo visual de "esto es clicable".
-3. Pulido + cerrar PROJECT.md.
-
-**Dónde tocar:** `wakfu_calculadora_1.html` — función `renderResults` (tabla principal y sección
-Modo debug están dentro de la misma función, buscar `debugFilterCat`/`applyDebugFilters`).
-
-**Cualquier cosa rota/a medio probar ahora mismo:** nada roto.
-
-**Log de prueba usado:** ninguno necesario, no se toca el parser.
+De paso: la feature que esta sesión iba a empezar ("clic en un dato → modo debug filtrado")
+resultó estar ya implementada por otra sesión en paralelo (mecanismo `pinnedFilter`, chip
+"Filtrando: … Quitar ✕", cubre casi todas las tablas). Ver PROJECT.md, sección "Modo debug →
+Click-to-filter". No se ha duplicado ese trabajo.
 
 ## Plantilla a rellenar cuando se deja algo a medias
 
