@@ -229,6 +229,59 @@ caja de texto para anotar el motivo. Botón "Exportar eventos marcados" descarga
 línea + categoría + atribución + razón del sistema + nota del usuario, pensado para pegárselo a
 Claude y depurar casos concretos juntos.
 
+## Clic en un dato → modo debug filtrado (en curso — ver ALCANCE)
+
+**Objetivo:** hoy el hover ya enseña las líneas de log detrás de un dato (derribos,
+resurrecciones, mods, hechizos), pero no las 4 columnas agregadas de la tabla principal (Daño
+hecho/recibido, Curación hecha/recibida) — y en ningún caso hay forma de saltar de un dato al
+Modo debug ya filtrado a esas líneas exactas. Se pide: clic en un dato → abre el Modo debug
+filtrado exactamente a los eventos que lo componen. Además, para el caso de daño/curación hechos,
+poder comparar esos eventos con los de lanzamiento (cast) atribuidos a ese mismo jugador, para
+verificar visualmente si la atribución de lanzador fue correcta.
+
+**Solución:**
+- Se añaden tooltips a las 4 columnas agregadas que hoy no lo tienen (Daño hecho/recibido,
+  Curación hecha/recibida), calculados filtrando `debugEvents` al vuelo (no hace falta tocar
+  `parseCombat` — `debugEvents` ya registra cada línea con su `category`/`source`/`target`).
+- Esas 4 columnas, más Derribos y Resurrecciones (que ya tenían tooltip), pasan a ser
+  clicables: el clic abre el Modo debug con los filtros ya puestos a los eventos exactos detrás
+  de ese número, y hace scroll hasta ahí.
+- El Modo debug gana dos selects nuevos junto al de categoría — "Objetivo" y "Atribuido a" — y
+  una casilla "+ incluir lanzamientos de 'Atribuido a'" que, marcada, añade también las líneas
+  de categoría `lanzamiento` de ese jugador aunque el filtro de categoría esté en otra cosa. Al
+  entrar desde Daño hecho/Curación hecha se marca automáticamente, para poder comparar de un
+  vistazo el momento de cada golpe con el hechizo que lo causó.
+- Mapeo dato → filtro: Daño hecho = categoría `daño` + Atribuido a = jugador. Daño recibido =
+  categoría `daño` + Objetivo = jugador. Curación hecha = categoría `curación` + Atribuido a =
+  jugador. Curación recibida = categoría `curación` + Objetivo = jugador. Derribos = categoría
+  `derribo` + Objetivo = jugador. Resurrecciones = categoría `resurrección` + Atribuido a =
+  jugador.
+
+### ALCANCE
+
+**Toca:** las 6 columnas agregadas de la tabla principal citadas arriba; el Modo debug (nuevos
+selects, checkbox, refactor de la lógica de filtrado a una función pura `debugRowMatches`
+testable con Node, sin cambiar el comportamiento de los filtros que ya existían — categoría,
+búsqueda de texto, solo marcados).
+
+**NO toca:** `parseCombat`/`resolveSource` (no se cambia nada de cómo se calculan ni atribuyen
+los eventos, solo cómo se consultan después); el desglose por hechizo ni el de armadura/mods
+(ya tienen tooltip por hover, pero el clic-a-debug para esas tablas queda fuera de esta feature
+— posible ampliación futura, no se pierde nada al dejarlo así); historial/comparativa/modo
+debug que aprende (sin cambios).
+
+**Milestones:**
+1. Lógica pura y testable: `eventsForMetric(debugEvents, category, {source, target})` y
+   `debugRowMatches(ev, filtros)`; atributos `data-source`/`data-target` en las filas de debug;
+   nuevos selects "Objetivo"/"Atribuido a" + checkbox en la toolbar, usando la función pura.
+   Validar con Node que el comportamiento de los filtros ya existentes (categoría, búsqueda,
+   solo marcados) no cambia.
+2. Tooltips que faltaban en las 4 columnas agregadas + clic-a-debug en las 6 columnas (función
+   `openDebugFiltered`, que abre la sección, pone los filtros y hace scroll) + estilo visual que
+   distinga qué celdas son clicables.
+3. Pulido: casilla "incluir lanzamientos" automática al entrar desde Daño/Curación hecha, cerrar
+   esta sección de PROJECT.md.
+
 ## Limitaciones conocidas (algunas deliberadas, no por desconocimiento)
 
 - **PA/PM/PW, resistencia y esquiva/placaje dados (en positivo) NO se trackean.** El texto del

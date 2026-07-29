@@ -4,14 +4,30 @@
 > parte de PROJECT.md con normalidad. Si NO está vacío, hay trabajo a medias — lee esto
 > ANTES de tocar código, para no reimplementar o pisar algo ya empezado.
 
-## Estado: Nada en curso
+## Estado: En curso
 
-Última feature completada: clasificación aliado/enemigo por combate del historial (modal
-`openRoleModal` + `entry.roles`), con la comparativa dividiendo ya "Total del grupo" en
-Aliados/Enemigos en vez de amalgamar ambos. Documentado en PROJECT.md, sección "Clasificación
-aliado/enemigo". Milestones 1/3, 2/3 y 3/3 commiteados y pusheados. Nada roto, nada a medio
-probar. Limitación conocida y aceptada: la vista de tendencia sigue sin separar por bando (fuera
-de alcance a propósito, ver esa sección de PROJECT.md).
+**Feature/tarea:** Clic en un dato (Daño hecho/recibido, Curación hecha/recibida, Derribos,
+Resurrecciones) → abre el Modo debug ya filtrado a los eventos exactos detrás de ese número, con
+opción de incluir también los lanzamientos (casts) de ese jugador para verificar la atribución.
+
+**Objetivo:** ver PROJECT.md, sección "Clic en un dato → modo debug filtrado (en curso — ver
+ALCANCE)", con el detalle completo.
+
+**Hecho hasta ahora:** nada commiteado todavía (acabo de escribir el alcance en PROJECT.md).
+
+**Falta por hacer (milestones, ver PROJECT.md):**
+1. `eventsForMetric`/`debugRowMatches` (funciones puras) + `data-source`/`data-target` en filas
+   de debug + selects "Objetivo"/"Atribuido a" + checkbox "incluir lanzamientos".
+2. Tooltips que faltan en las 4 columnas agregadas + clic-a-debug en las 6 columnas +
+   `openDebugFiltered` + estilo visual de "esto es clicable".
+3. Pulido + cerrar PROJECT.md.
+
+**Dónde tocar:** `wakfu_calculadora_1.html` — función `renderResults` (tabla principal y sección
+Modo debug están dentro de la misma función, buscar `debugFilterCat`/`applyDebugFilters`).
+
+**Cualquier cosa rota/a medio probar ahora mismo:** nada roto.
+
+**Log de prueba usado:** ninguno necesario, no se toca el parser.
 
 ## Plantilla a rellenar cuando se deja algo a medias
 
