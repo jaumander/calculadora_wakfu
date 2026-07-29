@@ -1740,6 +1740,23 @@ function parseCombat(lines, resolutions){
     return false;
   }
 
+  // Segunda excepción de atribución, mismo espíritu que Pulgas pero más simple de verificar: una
+  // curación indirecta de un aura que Laik aplica (ej. "El Gatallón") SÍ lleva el nombre del
+  // efecto explícito en su propia línea ("+354 PdV (fuego) (El Gatallón)"), y ese estado ya se
+  // registra correctamente con el mecanismo estándar de "Niv. 1" (a diferencia de Pulgas, cuyo
+  // formato "+N niv." no encaja con ese mecanismo). No hace falta ninguna señal externa tipo
+  // Racha: basta con mirar si algún nombre entre paréntesis de la curación coincide con un estado
+  // ya registrado en stateOwners con un único dueño — igual que resolveSource ya hace para
+  // buffs/debuffs, pero aquí mirando TODOS los paréntesis de la línea (no solo el primero, que en
+  // una curación suele ser el elemento, no el nombre del efecto).
+  function healNamedEffectOwner(rest){
+    const groups = (rest.match(/\(([^)]+)\)/g) || []).map(g => g.slice(1, -1).trim().toLowerCase());
+    for (const g of groups){
+      if (stateOwners[g] && stateOwners[g].size === 1) return [...stateOwners[g]][0];
+    }
+    return null;
+  }
+
   for (let li = 0; li < lines.length; li++){
     const line = lines[li];
     const m = combatLineRe.exec(line);
@@ -1780,11 +1797,18 @@ function parseCombat(lines, resolutions){
       let sourceReason = source
         ? `Atribuido a ${source} por ser el lanzador activo cuando ocurrió este golpe${currentSpell ? ` (${currentSpell})` : ''}`
         : 'Sin lanzador activo detectado; no se sumó a ningún jugador como daño/curación hecha';
-      let laikPulgasOverride = false;
+      let healSourceOverride = false;
       if (sign === '+' && source !== 'Laik' && healBelongsToLaikPulgas(rest, li)){
-        laikPulgasOverride = true;
+        healSourceOverride = true;
         source = 'Laik';
         sourceReason = `Atribuido a Laik: curación etiquetada solo con ${rest.trim()} y sin nombre de efecto — proc indirecto de "Pulgas" (confirmado contra log real con la señal de su pasiva "Racha Sanadora", ver PROJECT.md), anula al lanzador activo (${currentCaster || 'ninguno'})`;
+      } else if (sign === '+'){
+        const namedOwner = healNamedEffectOwner(rest);
+        if (namedOwner && namedOwner !== source){
+          healSourceOverride = true;
+          source = namedOwner;
+          sourceReason = `Atribuido a ${namedOwner}: la curación nombra un efecto (${rest.trim()}) cuyo dueño registrado es ${namedOwner} — aura/estado indirecto, anula al lanzador activo (${currentCaster || 'ninguno'})`;
+        }
       }
       if (sign === '-'){
         tp.dmgReceived += amount;
@@ -1795,7 +1819,7 @@ function parseCombat(lines, resolutions){
       }
       if (rest.includes('¡Anticipación!')) tp.anticipatedHits++;
       logEvent(line.trim(), sign === '-' ? 'daño' : 'curación', target, source, sourceReason);
-      if (!laikPulgasOverride && pending && pending.caster === currentCaster){
+      if (!healSourceOverride && pending && pending.caster === currentCaster){
         pending.hadEffect = true;
         const sp = ensureSpell(ensure(pending.caster), pending.spellName);
         sp.count++;

@@ -156,6 +156,41 @@ la heurística de lanzador activo existente. El desglose "por hechizo" del jugad
 como lanzador activo NO cuenta estas curaciones reatribuidas (para no duplicar el número en dos
 sitios a la vez).
 
+## Extensión: curas de auras con nombre de efecto explícito (ej. "El Gatallón") a su dueño real
+
+**Petición del usuario:** las curas de "El Gatallón" (otra aura que Laik aplica) también son
+indirectas y deben atribuirse a Laik, igual que Pulgas.
+
+**Por qué es un caso distinto y más simple que Pulgas:** a diferencia de Pulgas (formato de
+nivel "+N niv." que no encaja con el registro estándar de estados, y sin nombre de efecto en la
+propia línea de curación), "El Gatallón" SÍ se registra correctamente con el mecanismo estándar
+de "Niv. 1" ya existente, y la curación SÍ lleva el nombre del efecto explícito en su propia
+línea: `Laik: +354 PdV (fuego) (El Gatallón)`. No hace falta ninguna señal externa tipo "Racha
+Sanadora" — basta con mirar si alguno de los nombres entre paréntesis de la curación coincide con
+un estado ya registrado en `stateOwners` con un único dueño (mismo principio que `resolveSource`
+ya usa para buffs/debuffs, pero mirando TODOS los paréntesis de la línea, no solo el primero, que
+en una curación suele ser el elemento y no el nombre del efecto).
+
+**Regla implementada, general (no hardcodeada a "El Gatallón" ni a "Laik"):** una curación cuya
+línea nombra entre paréntesis un estado ya registrado con un único dueño se atribuye a ese dueño
+en vez de al lanzador activo. Esto cubre "El Gatallón" sin necesidad de codificar su nombre a
+mano, y cubriría automáticamente cualquier otra aura similar que aparezca en el futuro, siempre
+que ya esté registrada por el mecanismo estándar de "Niv. 1" y tenga un único dueño.
+
+**Validación contra `wakfu_chat.log` real — resultado honesto:** en este log solo hay 1 ejemplo
+de curación de "El Gatallón", y en ese caso concreto el lanzador activo ya era Laik por
+coincidencia (se la aplicó a sí mismo y se curó en su propio turno), así que la regla no tiene
+ningún caso real en este log donde demuestre estar corrigiendo algo — pero tampoco rompe nada
+(comprobación de regresión: los 11 eventos de Pulgas y el total de curación de Laik no cambian).
+Para probar que la lógica sí dispara cuando hace falta, se validó con un caso SINTÉTICO (no del
+log real, construido a mano): Laik lanza "El Gatallón", luego otro jugador pasa a ser lanzador
+activo, y llega una curación indirecta con "(El Gatallón)" en el texto sobre un tercero — se
+atribuye correctamente a Laik, no al lanzador activo del momento.
+
+**Dónde vive en el código:** `parseCombat`, función `healNamedEffectOwner(rest)`, junto a
+`healBelongsToLaikPulgas`. Mismo flag `healSourceOverride` que Pulgas para excluir estas
+curaciones del desglose "por hechizo" del lanzador activo desplazado.
+
 ## Historial persistente y comparativa entre combates
 
 Cada vez que se calcula un combate, aparece un bloque "Guardar este combate en el historial"
