@@ -6,15 +6,21 @@
 
 ## Estado: Nada en curso
 
-Última feature completada: excepción de atribución de curas de Pulgas (luz)/(fuego) a Laik.
-Requirió dos rondas de aclaración con el usuario (la petición original habría robado curaciones
-legítimas a otros 7 jugadores; la aclaración final ancló la regla exactamente a la etiqueta de
-elemento, usando la señal de "Racha Sanadora" solo como comprobación interna, no como la regla en
-sí). Validado con Node contra `wakfu_chat.log` real: 11 eventos reatribuidos, conservación exacta
-(lo que pierden unos es exactamente lo que gana Laik), cero falsos positivos confirmados
-explícitamente contra las curaciones de Hidori/Cunejo que comparten esa misma etiqueta por
-coincidencia. Documentado en PROJECT.md, sección "Excepción de atribución: curas de Pulgas
-(luz)/(fuego) a Laik". Nada roto, nada a medio probar.
+Última feature completada: excepción de atribución de curas de Pulgas (luz)/(fuego) a Laik, y su
+extensión posterior a curas de auras con nombre de efecto explícito ("El Gatallón"), generalizada
+vía el dueño de estado ya registrado en `stateOwners` (no hardcodeada al nombre "El Gatallón").
+Pulgas requirió dos rondas de aclaración con el usuario (la petición original habría robado
+curaciones legítimas a otros 7 jugadores; la aclaración final ancló la regla exactamente a la
+etiqueta de elemento, usando la señal de "Racha Sanadora" solo como comprobación interna, no como
+la regla en sí). Validado con Node contra `wakfu_chat.log` real: 11 eventos reatribuidos,
+conservación exacta (lo que pierden unos es exactamente lo que gana Laik), cero falsos positivos
+confirmados explícitamente contra las curaciones de Hidori/Cunejo que comparten esa misma etiqueta
+por coincidencia. La extensión de El Gatallón solo tenía 1 ejemplo real en el log y ese caso ya
+estaba bien atribuido por coincidencia (Laik era target y lanzador activo a la vez), así que se
+validó con un caso sintético construido a mano además de la comprobación de regresión (Pulgas y
+el total de Laik no cambian). Documentado en PROJECT.md, secciones "Excepción de atribución: curas
+de Pulgas (luz)/(fuego) a Laik" y "Extensión: curas de auras con nombre de efecto explícito...".
+Nada roto, nada a medio probar.
 
 ## Plantilla a rellenar cuando se deja algo a medias
 
