@@ -110,6 +110,56 @@ buffs/debuffs %. El daño/curación directos NO pasan por este sistema — usan 
 de lanzador activo, que es fiable porque son el resultado directo de una acción, no un efecto
 retardado de zona.
 
+## Principio general: datos indirectos con lanzador desplazado (Pulgas, El Gatallón, futuros casos)
+
+**El problema, en general:** el motor asume por defecto que un evento de daño/curación directo
+(`pdvRe`) pertenece a quien tiene el turno activo ("lanzador activo") en ese instante — heurística
+documentada como fiable porque "es el resultado directo de una acción, no un efecto retardado de
+zona". Pulgas y El Gatallón demuestran que esa premisa **no siempre es cierta**: son estados/auras
+que un jugador aplica en un momento dado, y que luego generan daño/curación varios turnos después
+—cuando el turno activo ya es el de otro jugador, o incluso el del propio objetivo—, sin que haya
+ningún "lanza el hechizo" inmediatamente antes que delate quién es el responsable real.
+
+**Cómo se reconoce este patrón en el log (señales, no reglas fijas):**
+- El evento (`+N PdV` o `-N PdV`) no va precedido de un `lanza el hechizo` del jugador correcto.
+- Puede llevar el nombre del efecto explícito entre paréntesis (caso fácil, como El Gatallón: se
+  resuelve consultando `stateOwners`, sin hacer falta más), o puede no llevarlo (caso difícil,
+  como Pulgas: hace falta una señal indirecta, en ese caso la pasiva "Racha Sanadora", para
+  confirmar el origen sin adivinar).
+- El "objetivo" del evento suele ser quien lleva el estado/debuff que el verdadero responsable
+  aplicó antes, no el responsable en sí.
+
+**Cómo se investiga un caso nuevo (nunca al revés — nunca implementar primero y verificar
+después):**
+1. Pedir o usar un log real; nunca asumir el patrón por analogía con Pulgas/El Gatallón.
+2. Contar CUÁNTOS eventos entran en el patrón propuesto y A QUIÉN pertenecen actualmente (grep al
+   log, o Node contra `parseCombat` real). Si la regla propuesta "roba" datos de jugadores que no
+   tienen nada que ver, hay que estrechar la condición (fue exactamente lo que pasó con la
+   petición original de Pulgas: "toda cura (luz)/(fuego)" robaba a 7 jugadores; la regla real
+   quedó mucho más estrecha).
+3. Buscar si el estado en cuestión ya se registra correctamente con el mecanismo estándar de
+   "Niv. 1" (`stateLevelRe`) — si el formato real del log no encaja (como pasaba con "Pulgas
+   (+31 niv.)"), ese es motivo para arreglar el registro en vez de inventar una señal externa.
+4. Validar con Node: conservación exacta (lo que pierde un jugador es exactamente lo que gana
+   otro, nunca se debe crear ni destruir daño/curación), y comprobar explícitamente que jugadores
+   con datos parecidos por coincidencia NO se ven afectados (falsos positivos).
+5. Si el log real no tiene ningún ejemplo donde la regla dispare de verdad (como pasó con El
+   Gatallón, que solo tenía 1 ejemplo y ya estaba bien atribuido por casualidad), decirlo tal
+   cual — no dar la regla por probada solo porque no rompió nada. Un caso sintético construido a
+   mano puede demostrar que la lógica funciona, pero no sustituye la validación contra datos
+   reales cuando existan.
+
+**Casos conocidos hasta ahora** (detalle completo en sus propias secciones más abajo):
+- **Pulgas → curas a Laik:** curación etiquetada EXACTAMENTE `(fuego)` o `(luz) (Fuego)`, sin
+  nombre de efecto, verificada con la señal de "Racha Sanadora".
+- **El Gatallón → cura a su dueño:** curación que nombra el efecto entre paréntesis; se resuelve
+  consultando el dueño ya registrado en `stateOwners` (regla general, no hardcodeada al nombre).
+
+**Para próximas sesiones:** si al usuario se le ocurre un caso nuevo de este tipo, seguir el
+proceso de arriba antes de tocar `parseCombat`. Puede tratarse de curación, daño (ej. un reflejo
+o contraataque que se dispara en el turno de otro), o cualquier otro campo — el principio es el
+mismo independientemente del tipo de dato.
+
 ## Excepción de atribución: curas de Pulgas (luz)/(fuego) a Laik
 
 **Petición original:** "toda curación etiquetada (luz)/(fuego) se atribuye a Laik si está en el
