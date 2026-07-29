@@ -110,63 +110,51 @@ buffs/debuffs %. El daño/curación directos NO pasan por este sistema — usan 
 de lanzador activo, que es fiable porque son el resultado directo de una acción, no un efecto
 retardado de zona.
 
-## Excepción de atribución: autocuración indirecta de "Pulgas" (en curso — BLOQUEADA, ver ALCANCE)
+## Excepción de atribución: curas de Pulgas (luz)/(fuego) a Laik
 
 **Petición original:** "toda curación etiquetada (luz)/(fuego) se atribuye a Laik si está en el
-combate". Investigación contra un log real (ya no adjunto en esta conversación, hace falta que
-se vuelva a subir) descartó esa regla tal cual: de 104 curaciones con esas etiquetas, solo 25 son
-de Laik — las otras 79 son de Hidori, Ledgem, Androido, Hikku, Ofrizz, Torreta y Cunejo,
-curaciones legítimas de sus propios hechizos. Implementar la regla literal les habría robado casi
-8 de cada 10 curaciones a esos 7 jugadores.
+combate". Investigación contra un log real descartó esa regla tal cual: de las curaciones con
+esas etiquetas, la mayoría eran de Hidori, Ledgem, Androido, Hikku, Ofrizz — curaciones legítimas
+de sus propios hechizos (Cunejo, Llama Purificadora). Implementarla literalmente les habría
+robado curaciones a esos jugadores.
 
-**Aclaración del usuario que reabre el caso:** ese "robo" es correcto para un subconjunto
-concreto — una curación indirecta que ocurre al terminar el turno de un jugador que "lleva
-pulgas" (un estado/debuff), pero las pulgas se las puso Laik, así que esa curación puntual sí
-debería atribuirse a Laik aunque el objetivo (y el "lanzador activo" del motor actual) sea otro.
+**Aclaración del usuario que definió la regla real:** el "robo" es correcto solo para un
+subconjunto — una curación indirecta que ocurre al terminar el turno de un jugador que "lleva
+pulgas" (debuff que Laik aplica con hechizos como "Ruleta de Dados"/"Laceraciones"), esa
+curación puntual sí debería atribuirse a Laik aunque el objetivo (y el "lanzador activo" del
+motor) sea otro. El usuario también aclaró que "Racha Sanadora" (una pasiva de Laik que sube %
+con cualquier curación suya) NO es la regla en sí, solo una señal de que una curación es suya —
+la regla real es la etiqueta (luz)/(fuego) de las pulgas.
 
-**Evidencia ya reunida (grep contra el log real de esa sesión, no re-verificada todavía en
-ESTA conversación):**
-- El estado "Pulgas" no usa el formato `(Niv. N)` que ya reconoce `stateLevelRe` — usa
-  incrementos tipo `+31 niv.`, `+62 niv.`, etc. que se van sumando. Formato exacto de esa línea
-  **todavía sin confirmar** — hace falta el log real para escribir el regex correcto.
-- Curaciones con SOLO etiqueta de elemento entre paréntesis, sin ningún nombre de efecto detrás
-  (ej. `X: +1 PdV (fuego)`): 67 líneas — 20 Laik, 11 Ledgem, 9 Ofrizz, 9 Hikku, 8 Hidori,
-  7 Androido, 3 Torreta.
-- Curaciones con luz/fuego que SÍ llevan un nombre de efecto explícito detrás (ej. "Propagador -
-  Médico sin Barreras", "Marca del Reintegro"): 53 líneas — reparto similar entre jugadores.
-  Estas SÍ parecen curaciones directas de hechizos reales de cada jugador, no procs de Pulgas.
+**Regla implementada (verificada línea por línea contra `wakfu_chat.log` real):** una curación
+etiquetada EXACTAMENTE con `(fuego)` o `(luz) (Fuego)` —sin ningún nombre de efecto detrás— se
+atribuye a Laik en vez de al lanzador activo. La señal de "Racha Sanadora" de Laik se usa
+internamente solo como comprobación (no como la condición conceptual) para no robarle a Hidori
+su "Llama Purificadora" ni a su invocación Cunejo su "Murmullos Curativos", que por coincidencia
+producen curaciones con esa misma etiqueta de elemento sin nombre de efecto detrás, pero no
+tienen nada que ver con Pulgas.
 
-**Duda sin resolver — por qué está bloqueada, no lista para implementar:** las curaciones
-directas de un hechizo lanzado (ej. "Laik lanza el hechizo Poción... → Objetivo: +1500 PdV
-(agua)") tampoco llevan nombre de efecto en la línea de PdV — el nombre de efecto entre
-paréntesis solo aparece en procs/auras retardadas, no en el golpe directo de un hechizo. Así que
-el grupo de "67 curas solo elemento" probablemente MEZCLA dos cosas distintas: curaciones directas
-legítimas de hechizos de cada jugador (donde el lanzador activo ya es correcto) y procs pasivos
-de Pulgas al terminar el turno (donde debería ser Laik). Separarlas a ciegas por "tiene o no
-nombre de efecto" sería el mismo tipo de suposición sin verificar que ya causó el primer error de
-esta conversación — hace falta el log real para comprobar, línea a línea, cuáles de esas 67
-tienen un "X lanza el hechizo Y" del propio objetivo justo antes (→ curación directa, no tocar) y
-cuáles no (→ candidata a proc de Pulgas).
+**Validado contra el log real con Node** (`parseCombat` aislado, antes/después):
+- 11 eventos de curación se reatribuyen de Hidori/Hikku/Ledgem/Ofrizz/Androido/Súper Cunejo a
+  Laik.
+- Conservación exacta: la suma de lo que pierden esos 6 jugadores (5.881 PdV) es exactamente lo
+  que gana Laik (+5.881 PdV) — nada se crea ni se pierde, solo se reasigna.
+- Cero falsos positivos: se comprobó explícitamente que las curaciones de Hidori (Llama
+  Purificadora) y Cunejo (Murmullos Curativos) con esa misma etiqueta de elemento siguen
+  atribuidas a ellos, no a Laik.
+- Las curaciones con nombre de efecto explícito (ej. "Marca del Reintegro", de Hikku, no
+  relacionado con Pulgas) no se tocan — siguen con la heurística de lanzador activo de siempre.
+- Un caso relacionado pero fuera de esta regla, dejado tal cual a propósito: el aura "El
+  Gatallón" (que Laik también aplica) cura con etiqueta `(agua)`, no `(fuego)`/`(luz)(Fuego)` —
+  no entra en esta regla porque el usuario la definió específicamente para las pulgas, no para
+  esa aura. Si hiciera falta corregirla también, sería una regla aparte.
 
-### ALCANCE (pendiente de confirmar el diseño final tras ver el log)
-
-**Toca (si se confirma):** nuevo regex para detectar la aplicación/stack de "Pulgas"; una
-variante del sistema de "dueño" de `resolveSource` para registrar quién aplicó Pulgas a quién;
-la rama de curación directa de `parseCombat` (hoy NO pasa por `resolveSource`, ver "Motor de
-atribución" arriba) — ganaría una excepción puntual: si el objetivo lleva Pulgas activo Y la
-línea de curación no tiene nombre de efecto Y no hay un lanzamiento propio del objetivo
-inmediatamente antes, se atribuye al dueño de Pulgas en vez de al lanzador activo.
-
-**NO toca:** las 53 curaciones con nombre de efecto explícito (siguen con la heurística de
-lanzador activo de siempre); ningún otro estado/debuff que no sea Pulgas; el resto de
-`resolveSource` (armadura, resistencia, PA/PM/PW, buffs/debuffs %).
-
-**Bloqueada en:** falta volver a adjuntar `wakfu_chat.log` (u otro log real con Pulgas) en la
-conversación para: (1) confirmar el formato exacto de la línea de aplicación de Pulgas, (2)
-comprobar línea a línea cuáles de las 67 curaciones "solo elemento" tienen un lanzamiento propio
-del objetivo justo antes (curación directa, no tocar) y cuáles no (candidata real a Pulgas), y
-(3) validar la implementación final con Node contra ese log antes de entregarla, como exige la
-metodología del proyecto.
+**Dónde vive en el código:** `parseCombat`, función `healBelongsToLaikPulgas(rest, idx)` (justo
+antes del bucle principal) + su uso en la rama `pdvRe` de curación (`sign === '+'`). No toca
+`resolveSource` ni el resto de estados/debuffs — es una excepción puntual, autocontenida, sobre
+la heurística de lanzador activo existente. El desglose "por hechizo" del jugador que aparecía
+como lanzador activo NO cuenta estas curaciones reatribuidas (para no duplicar el número en dos
+sitios a la vez).
 
 ## Historial persistente y comparativa entre combates
 

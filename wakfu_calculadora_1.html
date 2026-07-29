@@ -1713,7 +1713,35 @@ function parseCombat(lines, resolutions){
   const koRe2 = /¡(.+?) está fuera de combate!/;
   const koRe3 = /^(.+?):\s*está fuera de combate\s*$/;
 
-  for (const line of lines){
+  // Excepción de atribución verificada contra un log real (ver PROJECT.md, sección "Excepción
+  // de atribución: curas de Pulgas (luz)/(fuego) a Laik"). La regla, tal y como la pidió el
+  // usuario: una curación etiquetada SOLO con (fuego) o (luz) (Fuego) —sin ningún nombre de
+  // efecto detrás— se atribuye a Laik en vez de al lanzador activo, porque es el proc indirecto
+  // de "Pulgas" (debuff que Laik aplica) disparándose al terminar el turno de quien lo lleva.
+  // "Racha Sanadora" NO es la regla en sí (es una pasiva de Laik que sube con cualquier curación
+  // suya, incluida esta) — se usa aquí solo como comprobación interna de que la curación es
+  // realmente de Laik, para no robarle a Hidori (hechizo "Llama Purificadora") ni a su invocación
+  // Cunejo ("Murmullos Curativos") sus propias curaciones directas, que por coincidencia usan la
+  // misma etiqueta de elemento sin nombre de efecto. Contrastado línea por línea contra el log:
+  // de las curas con exactamente esa etiqueta y sin nombre de efecto, todas las que SÍ llevan la
+  // señal de Racha corrigen una atribución errónea o ya eran de Laik; ninguna de las que NO la
+  // llevan pertenece a Laik (son las de Hidori/Cunejo mencionadas).
+  const laikHealTagRe = /^\s*\((fuego|luz\)\s*\(Fuego)\)\s*$/i;
+  const laikRachaRe = /\[Información \(combate\)\]\s*Laik:\s*(Racha \(\+\d+ niv\.\)|\d+% de curas realizadas \(Racha Sanadora\))/;
+  const anyPdvLineRe = /\[Información \(combate\)\]\s*.+?:\s*[+-][\d.]+\s*PdV/;
+  function healBelongsToLaikPulgas(rest, idx){
+    if (!laikHealTagRe.test((rest || '').trim())) return false;
+    // Mira hasta 3 líneas hacia delante; para en cuanto aparece OTRA línea de daño/curación,
+    // para no atribuirle a esta curación la señal que en realidad pertenece a la siguiente.
+    for (let j = idx + 1; j < Math.min(idx + 4, lines.length); j++){
+      if (laikRachaRe.test(lines[j])) return true;
+      if (anyPdvLineRe.test(lines[j])) return false;
+    }
+    return false;
+  }
+
+  for (let li = 0; li < lines.length; li++){
+    const line = lines[li];
     const m = combatLineRe.exec(line);
     if (!m) continue;
     const content = m[1];
@@ -1748,20 +1776,26 @@ function parseCombat(lines, resolutions){
       const amount = parseInt(cm[3].replace(/\./g, ''), 10);
       const rest = cm[4] || '';
       const tp = ensure(target);
+      let source = currentCaster || null;
+      let sourceReason = source
+        ? `Atribuido a ${source} por ser el lanzador activo cuando ocurrió este golpe${currentSpell ? ` (${currentSpell})` : ''}`
+        : 'Sin lanzador activo detectado; no se sumó a ningún jugador como daño/curación hecha';
+      let laikPulgasOverride = false;
+      if (sign === '+' && source !== 'Laik' && healBelongsToLaikPulgas(rest, li)){
+        laikPulgasOverride = true;
+        source = 'Laik';
+        sourceReason = `Atribuido a Laik: curación etiquetada solo con ${rest.trim()} y sin nombre de efecto — proc indirecto de "Pulgas" (confirmado contra log real con la señal de su pasiva "Racha Sanadora", ver PROJECT.md), anula al lanzador activo (${currentCaster || 'ninguno'})`;
+      }
       if (sign === '-'){
         tp.dmgReceived += amount;
-        if (currentCaster){ ensure(currentCaster).dmgDone += amount; }
+        if (source){ ensure(source).dmgDone += amount; }
       } else {
         tp.healReceived += amount;
-        if (currentCaster){ ensure(currentCaster).healDone += amount; }
+        if (source){ ensure(source).healDone += amount; }
       }
       if (rest.includes('¡Anticipación!')) tp.anticipatedHits++;
-      const dmgHealSource = currentCaster || null;
-      logEvent(line.trim(), sign === '-' ? 'daño' : 'curación', target, dmgHealSource,
-        dmgHealSource
-          ? `Atribuido a ${dmgHealSource} por ser el lanzador activo cuando ocurrió este golpe${currentSpell ? ` (${currentSpell})` : ''}`
-          : 'Sin lanzador activo detectado; no se sumó a ningún jugador como daño/curación hecha');
-      if (pending && pending.caster === currentCaster){
+      logEvent(line.trim(), sign === '-' ? 'daño' : 'curación', target, source, sourceReason);
+      if (!laikPulgasOverride && pending && pending.caster === currentCaster){
         pending.hadEffect = true;
         const sp = ensureSpell(ensure(pending.caster), pending.spellName);
         sp.count++;
