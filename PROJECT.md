@@ -660,6 +660,19 @@ pisar algo ya empezado. Al dejar algo a medias (por ejemplo por falta de tokens)
 esa plantilla y se hace commit/push antes de cerrar, en vez de esperar a tener la feature
 100% terminada. Detalle completo del protocolo dentro del propio `HANDOFF.md`.
 
+## Higiene de git (evitar que se cuelen archivos que no tocan)
+
+El repo tuvo un incidente donde `node_modules/` (carpeta de dependencias de Node, generada
+automáticamente al usar herramientas como jsdom para validar) se subió por error a GitHub,
+inflando el repo a 27MB/1836 archivos de más y ralentizando cualquier sesión que lo clonara.
+
+Para que no se repita:
+- Existe un `.gitignore` con `node_modules/` — no debe borrarse.
+- Antes de cualquier `git add`, revisar `git status` y añadir archivos de forma explícita
+  (ej. `git add wakfu_calculadora_1.html PROJECT.md`) en vez de `git add .` a ciegas.
+- Si una sesión necesita instalar dependencias de Node para validar algo, recordar que esa
+  carpeta es temporal y no debe commitearse.
+
 ## Créditos
 
 Idea original: [MethodWakfu Companion](https://companion.methodwakfu.com/) (jpark / Zephyrs
