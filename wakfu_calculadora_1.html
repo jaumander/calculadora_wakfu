@@ -1626,9 +1626,13 @@ function parseCombat(lines, resolutions){
       dmgDone:0, dmgReceived:0, healDone:0, healReceived:0,
       spellsCast:0, crits:0, effectSpells:0, effectCrits:0, koCount:0,
       armorGiven:0, armorReceived:0, anticipatedHits:0,
-      revives:0, reviveLines:[], mods:{}, spells:{}, koLines:[]
+      revives:0, reviveLines:[], mods:{}, spells:{}, koLines:[], targets:{}
     };
     return players[name];
+  }
+  function ensureTarget(p, name){
+    if (!p.targets[name]) p.targets[name] = {dmg:0, heal:0, hits:0};
+    return p.targets[name];
   }
   function ensureSpell(p, name){
     if (!p.spells[name]) p.spells[name] = {count:0, crits:0, dmgTotal:0, healTotal:0, elements:{}, lines:[]};
@@ -1818,6 +1822,11 @@ function parseCombat(lines, resolutions){
         if (source){ ensure(source).healDone += amount; }
       }
       if (rest.includes('¡Anticipación!')) tp.anticipatedHits++;
+      if (source){
+        const tgt = ensureTarget(ensure(source), target);
+        tgt.hits++;
+        if (sign === '-') tgt.dmg += amount; else tgt.heal += amount;
+      }
       logEvent(line.trim(), sign === '-' ? 'daño' : 'curación', target, source, sourceReason);
       if (!healSourceOverride && pending && pending.caster === currentCaster){
         pending.hadEffect = true;
