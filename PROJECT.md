@@ -677,28 +677,27 @@ Para que no se repita:
 
 Decidido con el usuario el 2026-07-31. Uso interno (no hay cuentas ni comparación contra otros
 jugadores — esa idea se descartó explícitamente por no encajar con el alcance del proyecto).
-Todo lo de aquí abajo sigue la filosofía actual: todo en el navegador, nada se sube a ningún
-servidor.
 
-Orden de prioridad (de más barato/aislado a más grande):
+**Corrección sobre la versión original de este roadmap:** se escribió sin haber leído primero
+todo lo ya implementado por sesiones anteriores (ver "Estado actual" más abajo), así que
+duplicaba trabajo ya hecho. Corregido:
 
-1. **Desglose de daño hecho por objetivo.** Ahora mismo el daño de un jugador es un único
-   número total; esto lo separa por "a qué mob/jugador enemigo golpeó y cuánto". Usa datos que
-   el parser ya extrae (el `target` de cada línea de PdV), solo cambia cómo se agrupan — pero
-   como toca `parseCombat`, se valida igual con Node contra un log real antes de commitear.
-2. **% de uptime real de buffs/debuffs por categoría.** Ahora se guarda cuántas veces se aplicó
-   un buff y su duración media en turnos, pero no en qué turno concreto empezó/acabó cada
-   aplicación — así que no se puede calcular qué % del combate estuvo activo. Requiere que
-   `parseCombat` empiece a trackear el número de turno actual (detectando cambios de turno en
-   el log) para poder calcular solapes. **Bloqueado hasta confirmar contra un log real cómo se
-   marca el cambio de turno en el chat** (no se debe asumir el patrón).
-3. **Gráfico de daño/curación acumulado a lo largo del combate.** Mismo bloqueo que el punto 2:
-   necesita saber en qué turno ocurrió cada evento, así que se implementa a la vez que el
-   tracking de turnos.
-4. **Histórico de combates guardados en el navegador (localStorage).** Guardar varios combates
-   analizados (no solo el último) para poder comparar progreso propio entre sesiones de juego.
-   No toca `parseCombat`, es una capa nueva de guardado/lectura sobre el resultado ya calculado
-   — bajo riesgo, no depende de tener un log nuevo para validar el parser.
+- ~~% de uptime real de buffs/debuffs por turno~~ y ~~gráfico de daño/curación por turno~~:
+  **ya investigado y descartado como inviable** — ver "Desglose por turno: descartado, no solo
+  pendiente" en "Limitaciones conocidas". El log no marca de forma fiable el fin de cada turno
+  (solo cuando se pasa antes de tiempo), así que no hay forma honesta de trocear el combate por
+  turno. La alternativa ya implementada son los **ratios de eficiencia** (daño medio por hechizo
+  con efecto, daño hecho ÷ recibido) en "Datos avanzados".
+- ~~Histórico de combates en el navegador~~: **ya implementado**, y de forma más completa de lo
+  planteado originalmente — historial persistente con nombre/etiquetas, comparativa entre 2
+  combates con deltas, gráfico de tendencia con 3+ combates, y hasta análisis con IA de esos
+  deltas. Ver "Estado actual".
+
+Queda pendiente de esta lista original solo:
+
+1. **Desglose de daño/curación hecha por objetivo** (a qué mob/jugador enemigo golpeó cada
+   jugador, y cuánto). Usa datos que el parser ya extrae (el `target` de cada línea de PdV),
+   solo cambia cómo se agrupan. **En curso** — ver HANDOFF.md.
 
 **Descartado explícitamente:** ranking o comparación contra otros jugadores (percentiles tipo
 WarcraftLogs) — requeriría servidor/cuentas y el usuario quiere la app de uso interno, sin subir

@@ -4,7 +4,41 @@
 > parte de PROJECT.md con normalidad. Si NO está vacío, hay trabajo a medias — lee esto
 > ANTES de tocar código, para no reimplementar o pisar algo ya empezado.
 
-## Estado: Nada en curso
+## Estado: EN CURSO
+
+**Feature/tarea:** Desglose de daño/curación hecha por objetivo (roadmap, punto 1)
+
+**Objetivo:** Por cada jugador, ver contra qué objetivo (mob/jugador enemigo) hizo cada golpe de
+daño/curación y cuánto, no solo el total agregado.
+
+**Hecho hasta ahora:**
+- `parseCombat`: cada jugador tiene ahora `targets: {}` (vía `ensureTarget`), rellenado en la
+  rama `pdvRe` usando el `source` ya resuelto (respeta las excepciones de Pulgas/aura con
+  nombre — no un `currentCaster` en crudo).
+- Validado con Node contra el `wakfu_chat.log` real subido en esta conversación: la suma de
+  `targets[*].dmg`/`.heal` por jugador coincide exactamente con `dmgDone`/`healDone` — cero
+  discrepancia, 18 jugadores, 0 ambiguos.
+- Commit: `72c5dc3` — "WIP: 1/2 desglose por objetivo - trackear targets{dmg,heal,hits}..."
+
+**Falta por hacer:**
+- Añadir sección de render (tabla plegable "Ver desglose por objetivo" por jugador), siguiendo
+  el mismo patrón que `spellSections`/`toggleSpells`/`spellsWrap` (buscar esas variables en
+  `wakfu_calculadora_1.html`).
+- Decidir si se ordena por daño o se deja alfabético por objetivo.
+- Actualizar el checklist de "Estado actual" en PROJECT.md marcando esto como `[x]` al terminar.
+
+**Dónde tocar:** `wakfu_calculadora_1.html`, función `renderResults` — justo después del bloque
+que genera `spellSections` (buscar `let spellSections = ''`), y en el HTML del template
+literal, justo después del bloque `spellsWrap`.
+
+**Último commit relevante:** `72c5dc3`
+
+**Cualquier cosa rota/a medio probar ahora mismo:** nada roto — el parser ya está validado, solo
+falta la parte visual.
+
+**Log de prueba usado:** `wakfu_chat.log` subido por el usuario en esta conversación (2648
+líneas, sin palabras clave inicio/fin — se probó pasando el archivo completo a `parseCombat`
+directamente en vez de vía el flujo normal de la UI).
 
 Última feature completada: excepción de atribución de curas de Pulgas (luz)/(fuego) a Laik, y su
 extensión posterior a curas de auras con nombre de efecto explícito ("El Gatallón"), generalizada
